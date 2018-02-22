@@ -1,9 +1,16 @@
+use hole_punch::ConnectionId;
+
 #[derive(Deserialize, Serialize, Clone)]
-enum CarrierProtocol {
-    Login {
+pub enum Protocol {
+    Register {
         name: String,
     },
-    LoginSucessfull,
+    RegisterSuccessFul,
+    Login {
+        name: String,
+        password: String,
+    },
+    LoginSuccessful,
     LoginFailure(String),
     ConnectToPeer {
         name: String,

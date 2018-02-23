@@ -1,17 +1,17 @@
+use error::*;
 use protocol::Protocol;
 
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::net::SocketAddr;
 
 use hole_punch::{plain, Config, Context, Stream};
 
 use futures::{Future, Poll, Sink, Stream as FStream};
 use futures::Async::Ready;
 
-use failure::{Error, ResultExt};
-
-use tokio_core::reactor::Handle;
+use tokio_core::reactor::{Core, Handle};
 
 type PeerContextPtr = Rc<RefCell<PeerContext>>;
 
@@ -28,6 +28,7 @@ impl PeerContext {
 struct Peer {
     handle: Handle,
     context: Context<Protocol>,
+    peer_context: PeerContextPtr,
 }
 
 impl Peer {
@@ -36,21 +37,35 @@ impl Peer {
         cert_file: S,
         key_file: T,
         name: String,
-    ) -> Result<Peer, Error> {
+    ) -> Result<Peer> {
         let config = Config {
             udp_listen_address: ([0, 0, 0, 0], 0).into(),
             cert_file: cert_file.into(),
             key_file: key_file.into(),
         };
 
-        let context =
-            Context::new(handle.clone(), config).context("error creating hole_punch context")?;
+        let context = Context::new(handle.clone(), config)?;
 
         Ok(Peer {
             context,
             handle: handle.clone(),
+            peer_context: PeerContext::new(name),
         })
     }
+
+    pub fn register_and_run(mut self, evt_loop: &mut Core, server: &SocketAddr) -> Result<()> {
+        let peer_context = self.peer_context.clone();
+        let name = peer_context.borrow().name.clone();
+        let con = self.context
+            .create_connection_to_server(server)
+            .map_err(|e| e.into())
+            .and_then(move |s| InitialConnection::register(s, name))
+            .and_then(|s| Connection::new(s, peer_context));
+
+        evt_loop.run(self.join(con)).map(|_| ()).map_err(|e| e.0)
+    }
+
+    pub fn login() {}
 }
 
 impl Future for Peer {
@@ -68,7 +83,17 @@ impl Future for Peer {
 }
 
 struct Connection {
+    context: PeerContextPtr,
     stream: Option<Stream<Protocol>>,
+}
+
+impl Connection {
+    fn new(stream: Stream<Protocol>, context: PeerContextPtr) -> Connection {
+        Connection {
+            stream: Some(stream),
+            context,
+        }
+    }
 }
 
 impl Future for Connection {
@@ -100,7 +125,7 @@ struct InitialConnection {
 }
 
 impl InitialConnection {
-    fn login(stream: Stream<Protocol>, name: String, password: String) -> InitialConnection {
+    fn login(mut stream: Stream<Protocol>, name: String, password: String) -> InitialConnection {
         stream.start_send(Protocol::Login { name, password });
         stream.poll_complete();
 
@@ -109,7 +134,7 @@ impl InitialConnection {
         }
     }
 
-    fn register(stream: Stream<Protocol>, name: String) -> InitialConnection {
+    fn register(mut stream: Stream<Protocol>, name: String) -> InitialConnection {
         stream.start_send(Protocol::Register { name });
         stream.poll_complete();
 
@@ -137,7 +162,9 @@ impl Future for InitialConnection {
 
             match msg {
                 Protocol::RegisterSuccessFul | Protocol::LoginSuccessful => {
-                    return Ok(Ready(self.stream.take().unwrap()))
+                    let mut stream = self.stream.take().unwrap();
+                    stream.upgrade_to_authenticated();
+                    return Ok(Ready(stream));
                 }
                 _ => {}
             }

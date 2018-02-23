@@ -8,6 +8,8 @@ extern crate serde;
 extern crate serde_derive;
 extern crate tokio_core;
 
+#[macro_use]
+mod error;
 mod protocol;
 mod server;
 mod peer;

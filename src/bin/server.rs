@@ -1,5 +1,3 @@
 extern crate carrier;
 
-fn main() {
-    
-}
+fn main() {}

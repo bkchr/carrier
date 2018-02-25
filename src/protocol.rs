@@ -18,4 +18,9 @@ pub enum Protocol {
     },
     PeerNotFound,
     AlreadyConnected,
+    RequestService {
+        name: String,
+    },
+    ServiceNotFound,
+    ServiceConBuild,
 }

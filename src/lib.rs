@@ -14,3 +14,5 @@ mod protocol;
 mod server;
 mod peer;
 mod service;
+
+pub use server::Server;

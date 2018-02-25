@@ -53,6 +53,12 @@ impl<R: AsyncRead> Future for StdinReader<R> {
 
 pub struct Lifeline {}
 
+impl Lifeline {
+    pub fn new() -> Lifeline {
+        Lifeline {}
+    }
+}
+
 impl Service for Lifeline {
     fn spawn(&mut self, handle: &Handle, con: Stream) -> Result<()> {
         handle.spawn(

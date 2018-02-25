@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use hole_punch::{plain, Config, Context, Stream};
 
 use futures::{Future, Poll, Sink, Stream as FStream};
+use futures::future::Either;
 use futures::Async::Ready;
 
 use tokio_core::reactor::{Core, Handle};
@@ -167,14 +168,26 @@ impl Peer {
         service_name: &str,
     ) -> Result<plain::Stream> {
         let connection_id = self.context.generate_connection_id();
-        let con = evt_loop.run(self.context.create_connection_to_peer(
+
+        let con = self.context.create_connection_to_peer(
             connection_id,
             self.server_con.stream.as_mut().unwrap(),
             Protocol::ConnectToPeer {
                 name: name.into(),
                 connection_id,
             },
-        )?)?;
+        )?;
+
+        let con = match evt_loop.run(con.select2(self)).map_err(|e| match e {
+            Either::A((e, _)) => e.into(),
+            Either::B((e, _)) => e,
+        })? {
+            Either::A((con, _)) => con,
+            Either::B(_) => {
+                bail!("connection to server closed while waiting for connection to peer")
+            }
+        };
+        println!("REQUEST");
 
         evt_loop.run(RequestService::start(con, service_name)?)
     }
@@ -212,7 +225,7 @@ impl Connection {
         Connection {
             stream: Some(stream),
             context,
-            handle
+            handle,
         }
     }
 }
@@ -237,11 +250,17 @@ impl Future for Connection {
             match msg {
                 Protocol::RequestService { name } => {
                     if let Some(service) = self.context.borrow_mut().services.get_mut(&name) {
-                        self.stream.as_mut().unwrap().send_and_poll(Protocol::ServiceConBuild)?;
+                        self.stream
+                            .as_mut()
+                            .unwrap()
+                            .send_and_poll(Protocol::ServiceConBuild)?;
                         service.spawn(&self.handle, self.stream.take().unwrap().into_plain())?;
                         return Ok(Ready(()));
                     } else {
-                        self.stream.as_mut().unwrap().send_and_poll(Protocol::ServiceNotFound)?;
+                        self.stream
+                            .as_mut()
+                            .unwrap()
+                            .send_and_poll(Protocol::ServiceNotFound)?;
                     }
                 }
                 _ => {}

@@ -147,7 +147,7 @@ impl Peer {
         }
     }
 
-    pub fn builder<S: Into<PathBuf>, T: Into<PathBuf>>(
+    pub fn build<S: Into<PathBuf>, T: Into<PathBuf>>(
         handle: &Handle,
         cert_file: S,
         key_file: T,

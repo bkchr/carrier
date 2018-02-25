@@ -20,3 +20,4 @@ mod peer;
 pub mod service;
 
 pub use server::Server;
+pub use peer::Peer;

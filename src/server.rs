@@ -146,12 +146,15 @@ impl Future for Connection {
                 Protocol::Login { name, .. } => {
                     println!("Login: {}", name);
                     self.stream.send_and_poll(Protocol::LoginSuccessful)?;
+                    self.stream.upgrade_to_authenticated();
                 }
                 Protocol::Register { name } => {
+                    println!("Register: {}", name);
                     self.context
                         .register_connection(&name, self.stream.get_stream_handle());
                     self.name = Some(name);
                     self.stream.send_and_poll(Protocol::RegisterSuccessFul)?;
+                    self.stream.upgrade_to_authenticated();
                 }
                 Protocol::ConnectToPeer {
                     name,

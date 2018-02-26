@@ -44,8 +44,8 @@ impl<R: AsyncRead> Future for StdinReader<R> {
             let len = try_nb!(self.stdin.read(&mut self.buf));
 
             if len > 0 {
-                self.sink.start_send(BytesMut::from(&self.buf[..len]));
-                self.sink.poll_complete();
+                self.sink.start_send(BytesMut::from(&self.buf[..len]))?;
+                self.sink.poll_complete()?;
             }
         }
     }
@@ -94,8 +94,8 @@ impl Service for Lifeline {
         handle.spawn(
             stream
                 .for_each(|buf| {
-                    std::io::stdout().write(&buf);
-                    std::io::stdout().flush();
+                    std::io::stdout().write(&buf)?;
+                    std::io::stdout().flush()?;
                     Ok(())
                 })
                 .map_err(|_| ()),

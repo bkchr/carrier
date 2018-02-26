@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use hole_punch::{Config, Context, Stream, StreamHandle};
 
 use futures::{Future, Poll, Stream as FStream};
-use futures::Async::Ready;
+use futures::Async::{NotReady, Ready};
 
 use tokio_core::reactor::{Core, Handle};
 

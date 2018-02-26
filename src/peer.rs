@@ -187,7 +187,6 @@ impl Peer {
                 bail!("connection to server closed while waiting for connection to peer")
             }
         };
-        println!("REQUEST");
 
         evt_loop.run(RequestService::start(con, service_name)?)
     }

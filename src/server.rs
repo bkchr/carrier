@@ -124,22 +124,12 @@ impl Connection {
             name: None,
         }
     }
-}
 
-impl Future for Connection {
-    type Item = ();
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    fn poll_impl(&mut self) -> Poll<(), Error> {
         loop {
             let msg = match try_ready!(self.stream.poll()) {
                 Some(msg) => msg,
-                None => {
-                    if let Some(name) = self.name.take() {
-                        self.context.unregister_connection(&name)
-                    };
-                    return Ok(Ready(()));
-                }
+                None => return Ok(Ready(())),
             };
 
             match msg {
@@ -165,10 +155,31 @@ impl Future for Connection {
                             .create_connection_to(connection_id, &mut con)
                             .unwrap();
                     } else {
-                        self.stream.send_and_poll(Protocol::PeerNotFound);
+                        self.stream.send_and_poll(Protocol::PeerNotFound)?;
                     }
                 }
                 _ => {}
+            }
+        }
+    }
+}
+
+impl Future for Connection {
+    type Item = ();
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        match self.poll_impl() {
+            Ok(NotReady) => {
+                return Ok(NotReady);
+            }
+            r @ _ => {
+                // If we got an error or `Ok(Ready(()))`, we unregister the connection
+                if let Some(name) = self.name.take() {
+                    self.context.unregister_connection(&name)
+                };
+
+                r
             }
         }
     }

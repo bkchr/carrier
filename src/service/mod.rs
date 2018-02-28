@@ -1,16 +1,34 @@
+/*!
+For running a service over `Carrier`, a `Client` and a `Server` are required.
+It is required to implement the given `Client` and `Server` traits for services that should
+be running over `Carrier`.
+
+`Carrier` will call `Server::spawn` whenever a remote `Peer` requests the service from the local
+`Peer`. The remote `Peer` needs to run an instance of the `Client` service implementation.
+*/
 use error::*;
-use peer::{BuildPeer, PeerBuilder};
+use peer::PeerBuilder;
 
 use hole_punch::plain::Stream;
 
-use tokio_core::reactor::{Core, Handle};
+use tokio_core::reactor::Handle;
 
 pub mod lifeline;
 
-pub trait Service {
+/// Server side of a service.
+pub trait Server {
+    /// Spawn a new server instance of the service on the given connection.
     fn spawn(&mut self, handle: &Handle, con: Stream) -> Result<()>;
-    fn run(self, evt_loop: &mut Core, peer: BuildPeer, name: &str) -> Result<()>;
-    fn name(&self) -> String;
+    /// Returns the unique name of the service. The name will be used to identify this service.
+    fn name(&self) -> &'static str;
+}
+
+/// Client side of a service.
+pub trait Client {
+    /// Spawn a new client instance of the service on the given connection.
+    fn spawn(self, handle: &Handle, con: Stream) -> Result<()>;
+    /// Returns the unique name of the service. The name will be used to identify this service.
+    fn name(&self) -> &'static str;
 }
 
 pub fn register_builtin_services(builder: &mut PeerBuilder) {

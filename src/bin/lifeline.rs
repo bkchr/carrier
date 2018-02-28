@@ -1,7 +1,7 @@
 extern crate carrier;
 extern crate tokio_core;
 
-use carrier::service::{self, Service};
+use carrier::service;
 
 use tokio_core::reactor::Core;
 
@@ -22,9 +22,10 @@ fn main() {
         format!("{}/src/bin/cert.pem", manifest_dir),
         format!("{}/src/bin/key.pem", manifest_dir),
         "dev".into(),
-    ).unwrap();
+    ).unwrap().login(&server_addr, "test");
 
-    service::lifeline::Lifeline::new()
-        .run(&mut evt_loop, builder.login(&server_addr, "test".into()), &name)
-        .unwrap();
+    let peer = evt_loop.run(builder).unwrap();
+
+    peer.run_service(&mut evt_loop, service::lifeline::Lifeline::new(), &name)
+        .unwrap()
 }

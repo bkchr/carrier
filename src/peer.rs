@@ -1,6 +1,6 @@
 use error::*;
 use protocol::Protocol;
-use service::Service;
+use service::{Client, Server};
 
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -20,7 +20,7 @@ type PeerContextPtr = Rc<RefCell<PeerContext>>;
 
 struct PeerContext {
     name: String,
-    services: HashMap<String, Box<Service>>,
+    services: HashMap<String, Box<Server>>,
 }
 
 impl PeerContext {
@@ -39,11 +39,11 @@ pub struct PeerBuilder {
 }
 
 impl PeerBuilder {
-    fn new<S: Into<PathBuf>, T: Into<PathBuf>>(
+    fn new<S: Into<PathBuf>, T: Into<PathBuf>, N: Into<String>>(
         handle: &Handle,
         cert_file: S,
         key_file: T,
-        name: String,
+        name: N,
     ) -> Result<PeerBuilder> {
         let config = Config {
             udp_listen_address: ([0, 0, 0, 0], 0).into(),
@@ -56,16 +56,16 @@ impl PeerBuilder {
         Ok(PeerBuilder {
             context,
             handle: handle.clone(),
-            peer_context: PeerContext::new(name),
+            peer_context: PeerContext::new(name.into()),
         })
     }
 
-    pub fn register_service<S: Service + 'static>(&mut self, service: S) {
+    pub fn register_service<S: Server + 'static>(&mut self, service: S) {
         let name = service.name();
         self.peer_context
             .borrow_mut()
             .services
-            .insert(name, Box::new(service));
+            .insert(name.into(), Box::new(service));
     }
 
     pub fn register(mut self, server: &SocketAddr) -> BuildPeer {
@@ -90,14 +90,14 @@ impl PeerBuilder {
         }
     }
 
-    pub fn login(mut self, server: &SocketAddr, pw: String) -> BuildPeer {
+    pub fn login<S: Into<String> + 'static>(mut self, server: &SocketAddr, pw: S) -> BuildPeer {
         let peer_context = self.peer_context.clone();
         let name = peer_context.borrow().name.clone();
         let handle = self.handle.clone();
         let future = self.context
             .create_connection_to_server(server)
             .map_err(|e| e.into())
-            .and_then(move |s| InitialConnection::login(s, name, pw))
+            .and_then(move |s| InitialConnection::login(s, name, pw.into()))
             .map(move |s| {
                 Peer::new(
                     self.handle,
@@ -161,24 +161,24 @@ impl Peer {
         evt_loop.run(self)
     }
 
-    pub(crate) fn request_connection(
-        &mut self,
+    pub fn run_service<S: Client>(
+        mut self,
         evt_loop: &mut Core,
-        name: &str,
-        service_name: &str,
-    ) -> Result<plain::Stream> {
+        service: S,
+        peer: &str,
+    ) -> Result<()> {
         let connection_id = self.context.generate_connection_id();
 
         let con = self.context.create_connection_to_peer(
             connection_id,
             self.server_con.stream.as_mut().unwrap(),
             Protocol::ConnectToPeer {
-                name: name.into(),
+                name: peer.into(),
                 connection_id,
             },
         )?;
 
-        let con = match evt_loop.run(con.select2(self)).map_err(|e| match e {
+        let con = match evt_loop.run(con.select2(&mut self)).map_err(|e| match e {
             Either::A((e, _)) => e.into(),
             Either::B((e, _)) => e,
         })? {
@@ -188,7 +188,10 @@ impl Peer {
             }
         };
 
-        evt_loop.run(RequestService::start(con, service_name)?)
+        let con = evt_loop.run(RequestService::start(con, service.name())?)?;
+
+        service.spawn(&self.handle, con)?;
+        evt_loop.run(self)
     }
 }
 

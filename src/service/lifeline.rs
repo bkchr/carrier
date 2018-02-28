@@ -1,10 +1,9 @@
 use error::*;
-use super::Service;
-use peer::BuildPeer;
+use super::{Client, Server};
 
 use hole_punch::plain::Stream;
 
-use tokio_core::reactor::{Core, Handle};
+use tokio_core::reactor::Handle;
 use tokio_core::net::TcpStream;
 
 use tokio_io::io;
@@ -18,6 +17,43 @@ use std;
 use std::io::Write;
 
 use bytes::BytesMut;
+
+lazy_static! {
+    static ref LIFELINE_STDIN: std::io::Stdin = std::io::stdin();
+}
+
+pub struct Lifeline {}
+
+impl Lifeline {
+    pub fn new() -> Lifeline {
+        Lifeline {}
+    }
+}
+
+impl Server for Lifeline {
+    fn spawn(&mut self, handle: &Handle, con: Stream) -> Result<()> {
+        handle.spawn(
+            TcpStream::connect(&([127, 0, 0, 1], 22).into(), &handle)
+                .and_then(move |tcp| {
+                    let (read, write) = AsyncRead::split(con);
+                    let (read2, write2) = tcp.split();
+
+                    io::copy(read, write2)
+                        .map(|_| ())
+                        .select(io::copy(read2, write).map(|_| ()))
+                        .map(|_| ())
+                        .map_err(|e| e.0)
+                })
+                .map_err(|e| println!("ERROR: {:?}", e)),
+        );
+
+        Ok(())
+    }
+
+    fn name(&self) -> &'static str {
+        "lifeline"
+    }
+}
 
 struct StdinReader<R: AsyncRead> {
     stdin: R,
@@ -51,41 +87,10 @@ impl<R: AsyncRead> Future for StdinReader<R> {
     }
 }
 
-pub struct Lifeline {}
-
-impl Lifeline {
-    pub fn new() -> Lifeline {
-        Lifeline {}
-    }
-}
-
-impl Service for Lifeline {
-    fn spawn(&mut self, handle: &Handle, con: Stream) -> Result<()> {
-        handle.spawn(
-            TcpStream::connect(&([127, 0, 0, 1], 22).into(), &handle)
-                .and_then(move |tcp| {
-                    let (read, write) = AsyncRead::split(con);
-                    let (read2, write2) = tcp.split();
-
-                    io::copy(read, write2)
-                        .map(|_| ())
-                        .select(io::copy(read2, write).map(|_| ()))
-                        .map(|_| ())
-                        .map_err(|e| e.0)
-                })
-                .map_err(|e| println!("ERROR: {:?}", e)),
-        );
-
-        Ok(())
-    }
-
-    fn run(self, evt_loop: &mut Core, peer: BuildPeer, name: &str) -> Result<()> {
-        let mut peer = evt_loop.run(peer)?;
-        let con = peer.request_connection(evt_loop, name, &self.name())?;
-        let handle = evt_loop.handle();
-
-        let stdin_orig = std::io::stdin();
-        let stdin = tokio_file_unix::StdFile(stdin_orig.lock());
+impl Client for Lifeline {
+    fn spawn(self, handle: &Handle, con: Stream) -> Result<()> {
+        let lock = LIFELINE_STDIN.lock();
+        let stdin = tokio_file_unix::StdFile(lock);
         let stdin = tokio_file_unix::File::new_nb(stdin).unwrap();
         let stdin = stdin.into_reader(&handle).unwrap();
 
@@ -101,11 +106,12 @@ impl Service for Lifeline {
                 .map_err(|_| ()),
         );
 
-        evt_loop.run(StdinReader::new(stdin, sink))?;
+        handle.spawn(StdinReader::new(stdin, sink).map_err(|_| ()));
+
         Ok(())
     }
 
-    fn name(&self) -> String {
-        "lifeline".into()
+    fn name(&self) -> &'static str {
+        "lifeline"
     }
 }

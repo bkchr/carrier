@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 use hole_punch::{plain, Config, Context, Stream};
 
-use futures::{Future, Poll, Sink, Stream as FStream};
+use futures::{Future, Poll, Stream as FStream};
 use futures::future::Either;
 use futures::Async::Ready;
 
@@ -76,6 +76,7 @@ impl PeerBuilder {
             .create_connection_to_server(server)
             .map_err(|e| e.into())
             .and_then(move |s| InitialConnection::register(s, name))
+            .flatten()
             .map(move |s| {
                 Peer::new(
                     self.handle,
@@ -98,6 +99,7 @@ impl PeerBuilder {
             .create_connection_to_server(server)
             .map_err(|e| e.into())
             .and_then(move |s| InitialConnection::login(s, name, pw.into()))
+            .flatten()
             .map(move |s| {
                 Peer::new(
                     self.handle,
@@ -280,22 +282,24 @@ struct InitialConnection {
 }
 
 impl InitialConnection {
-    fn login(mut stream: Stream<Protocol>, name: String, password: String) -> InitialConnection {
-        stream.start_send(Protocol::Login { name, password });
-        stream.poll_complete();
+    fn login(
+        mut stream: Stream<Protocol>,
+        name: String,
+        password: String,
+    ) -> Result<InitialConnection> {
+        stream.send_and_poll(Protocol::Login { name, password })?;
 
-        InitialConnection {
+        Ok(InitialConnection {
             stream: Some(stream),
-        }
+        })
     }
 
-    fn register(mut stream: Stream<Protocol>, name: String) -> InitialConnection {
-        stream.start_send(Protocol::Register { name });
-        stream.poll_complete();
+    fn register(mut stream: Stream<Protocol>, name: String) -> Result<InitialConnection> {
+        stream.send_and_poll(Protocol::Register { name })?;
 
-        InitialConnection {
+        Ok(InitialConnection {
             stream: Some(stream),
-        }
+        })
     }
 }
 

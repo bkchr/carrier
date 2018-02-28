@@ -88,27 +88,29 @@ impl<R: AsyncRead> Future for StdinReader<R> {
 }
 
 impl Client for Lifeline {
-    fn spawn(self, handle: &Handle, con: Stream) -> Result<()> {
+    type Item = ();
+    type Error = Error;
+    type Future = Box<Future<Item = Self::Item, Error = Self::Error>>;
+
+    fn start(self, handle: &Handle, con: Stream) -> Result<Self::Future> {
         let lock = LIFELINE_STDIN.lock();
         let stdin = tokio_file_unix::StdFile(lock);
-        let stdin = tokio_file_unix::File::new_nb(stdin).unwrap();
-        let stdin = stdin.into_reader(&handle).unwrap();
+        let stdin = tokio_file_unix::File::new_nb(stdin)?;
+        let stdin = stdin.into_reader(&handle)?;
 
         let (sink, stream) = FStream::split(con);
 
-        handle.spawn(
+        Ok(Box::new(
             stream
                 .for_each(|buf| {
                     std::io::stdout().write(&buf)?;
                     std::io::stdout().flush()?;
                     Ok(())
                 })
-                .map_err(|_| ()),
-        );
-
-        handle.spawn(StdinReader::new(stdin, sink).map_err(|_| ()));
-
-        Ok(())
+                .map_err(|e| e.into())
+                .join(StdinReader::new(stdin, sink).map_err(|e| e.into()))
+                .map(|_| ()),
+        ))
     }
 
     fn name(&self) -> &'static str {

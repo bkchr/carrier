@@ -13,6 +13,10 @@ use hole_punch::plain::Stream;
 
 use tokio_core::reactor::Handle;
 
+use futures::Future;
+
+use std::result;
+
 pub mod lifeline;
 
 /// Server side of a service.
@@ -25,8 +29,12 @@ pub trait Server {
 
 /// Client side of a service.
 pub trait Client {
-    /// Spawn a new client instance of the service on the given connection.
-    fn spawn(self, handle: &Handle, con: Stream) -> Result<()>;
+    type Item;
+    type Error;
+    type Future: Future<Item = Self::Item, Error = Self::Error>;
+    /// Starts a new client instance of the service on the given connection.
+    /// The returned `Future` should resolve, when the service is finished.
+    fn start(self, handle: &Handle, con: Stream) -> result::Result<Self::Future, Self::Error>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }

@@ -166,7 +166,10 @@ impl Peer {
         evt_loop: &mut Core,
         service: S,
         peer: &str,
-    ) -> Result<()> {
+    ) -> Result<S::Item>
+    where
+        Error: From<S::Error>,
+    {
         let connection_id = self.context.generate_connection_id();
 
         let con = self.context.create_connection_to_peer(
@@ -190,8 +193,9 @@ impl Peer {
 
         let con = evt_loop.run(RequestService::start(con, service.name())?)?;
 
-        service.spawn(&self.handle, con)?;
-        evt_loop.run(self)
+        evt_loop
+            .run(service.start(&self.handle, con)?)
+            .map_err(|e| e.into())
     }
 }
 

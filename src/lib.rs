@@ -23,3 +23,5 @@ pub mod service;
 
 pub use server::Server;
 pub use peer::Peer;
+pub use error::Error;
+pub use hole_punch::plain::Stream as Connection;

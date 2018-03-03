@@ -8,8 +8,7 @@ be running over `Carrier`.
 */
 use error::*;
 use peer::PeerBuilder;
-
-use hole_punch::plain::Stream;
+use super::Connection;
 
 use tokio_core::reactor::Handle;
 
@@ -22,7 +21,7 @@ pub mod lifeline;
 /// Server side of a service.
 pub trait Server {
     /// Spawn a new server instance of the service on the given connection.
-    fn spawn(&mut self, handle: &Handle, con: Stream) -> Result<()>;
+    fn spawn(&mut self, handle: &Handle, con: Connection) -> Result<()>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }
@@ -34,7 +33,7 @@ pub trait Client {
     type Future: Future<Item = Self::Item, Error = Self::Error>;
     /// Starts a new client instance of the service on the given connection.
     /// The returned `Future` should resolve, when the service is finished.
-    fn start(self, handle: &Handle, con: Stream) -> result::Result<Self::Future, Self::Error>;
+    fn start(self, handle: &Handle, con: Connection) -> result::Result<Self::Future, Self::Error>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }

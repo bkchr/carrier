@@ -6,7 +6,7 @@ authors = ["Bastian Köcher <git@kchr.de>"]
 [dependencies]
 serde = "1.0"
 serde_derive = "1.0"
-hole_punch = { path = "../hole_punch" }
+hole_punch = { git = "https://github.com/bkchr/hole_punch.git" }
 futures = "0.1"
 failure = "0.1"
 tokio-core = "0.1"

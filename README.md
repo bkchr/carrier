@@ -22,7 +22,8 @@ After building it, we can run the server:
        -e CARRIER_CERT_PATH=/opt/carrier/cert.pem \
        -e CARRIER_KEY_PATH=/opt/carrier/key.pem \
        -net host \
-       carrier-server```
+       carrier-server
+```
 
 The server will listen by default on port `22222`. By defining the environment variable `CARRIER_LISTEN_PORT`,
 the server can be instructed to listen on another port.

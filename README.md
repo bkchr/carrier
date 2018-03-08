@@ -1,7 +1,7 @@
 Korhal Carrier is a decentralized edge access network.
 =======================================================
 
-Everything in this repository is in production and can not be stated as stable. You can loose your device in the void of the internet.
+Everything in this repository is work in progress and can not be stated as stable. You can loose your device in the void of the internet.
 
 it's primary purpose is to establish a connection between a node (an IoT device) and a controller (such as a fleet management service)
 

@@ -271,6 +271,9 @@ impl Future for Connection {
                             .send_and_poll(Protocol::ServiceNotFound)?;
                     }
                 }
+                Protocol::PeerNotFound => {
+                    panic!("Peer not found");
+                }
                 _ => {}
             }
         }

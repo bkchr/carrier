@@ -11,18 +11,24 @@ use std::net::SocketAddr;
 fn main() {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let mut evt_loop = Core::new().unwrap();
-    let server_addr: SocketAddr = ([127, 0, 0, 1], 22222).into();
 
     let name = args()
         .nth(1)
-        .expect("Please give the name of the other peer.");
+        .expect("Please give the name of the peer you want to connect to as first argument.");
+
+    let server_addr: SocketAddr = args()
+        .nth(2)
+        .expect("Please give carrier server address as second argument.")
+        .parse()
+        .expect("Invalid server address");
 
     let builder = carrier::Peer::build(
         &evt_loop.handle(),
         format!("{}/src/bin/cert.pem", manifest_dir),
         format!("{}/src/bin/key.pem", manifest_dir),
         "dev".into(),
-    ).unwrap().login(&server_addr, "test");
+    ).unwrap()
+        .login(&server_addr, "test");
 
     let peer = evt_loop.run(builder).unwrap();
 

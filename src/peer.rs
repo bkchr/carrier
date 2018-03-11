@@ -45,11 +45,11 @@ impl PeerBuilder {
         key_file: T,
         name: N,
     ) -> Result<PeerBuilder> {
-        let config = Config {
-            udp_listen_address: ([0, 0, 0, 0], 0).into(),
-            cert_file: cert_file.into(),
-            key_file: key_file.into(),
-        };
+        let config = Config::new(
+            ([0, 0, 0, 0], 0).into(),
+            cert_file.into(),
+            key_file.into(),
+        );
 
         let context = Context::new(handle.clone(), config)?;
 

@@ -69,11 +69,11 @@ impl Server {
         key_file: T,
         udp_listen_address: SocketAddr,
     ) -> Result<Server> {
-        let config = Config {
+        let config = Config::new(
             udp_listen_address,
-            cert_file: cert_file.into(),
-            key_file: key_file.into(),
-        };
+            cert_file.into(),
+            key_file.into(),
+        );
 
         let context = Context::new(handle.clone(), config)?;
 

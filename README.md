@@ -18,11 +18,11 @@ First we need to build the docker container:
 
 After building it, we can run the server:
 ```docker run --rm --name carrier \
-       -v $(pwd)/src/bin/:/opt/carrier \
-       -e CARRIER_CERT_PATH=/opt/carrier/cert.pem \
-       -e CARRIER_KEY_PATH=/opt/carrier/key.pem \
-       -e CARRIER_TRUSTED_CLIENT_CERTS_PATH=/opt/carrier/client_certs/ \
-       -net host \
+       -v $(pwd)/test_certs/:/opt/carrier \
+       -e CARRIER_CERT_PATH=/opt/carrier/server.cert.pem \
+       -e CARRIER_KEY_PATH=/opt/carrier/server.key.pem \
+       -e CARRIER_TRUSTED_CLIENT_CERTS_PATH=/opt/carrier/trusted_client_certs/ \
+       --net host \
        carrier-server
 ```
 
@@ -38,7 +38,10 @@ store. The certificates in the store need to be encoded as `PEM` and named `*.pe
 # Running a peer
 
 Execute the following command:
-`CARRIER_CERT_PATH=./src/bin/cert.pem CARRIER_KEY_PATH=./src/bin/key.pem CARRIER_SERVER_ADDR=SERVER_ADDR:SERVER_PORT cargo run --release --bin carrier-peer`
+```CARRIER_CERT_PATH=./test_certs/peer.cert.pem CARRIER_KEY_PATH=./test_certs/peer.key.pem \
+   CARRIER_TRUSTED_SERVER_CERTS_PATH=./test_certs/trusted_server_certs \
+   CARRIER_TRUSTED_CLIENT_CERTS_PATH=./test_certs/trusted_client_certs \
+   CARRIER_SERVER_ADDR=SERVER_ADDR:SERVER_PORT cargo run --release --bin carrier-peer```
 
 As the server, the peer requires a certificate. Here applies the same as for the server, never use this certificate/private key
 in production!

@@ -1,5 +1,4 @@
 extern crate carrier;
-extern crate glob;
 extern crate tokio_core;
 
 use tokio_core::reactor::Core;
@@ -18,9 +17,9 @@ fn main() {
     let trusted_client_certificates_path = var("CARRIER_TRUSTED_CLIENT_CERTS_PATH")
         .expect("Please give path to the trusted client certificates(*.pem) via `CARRIER_TRUSTED_CLIENT_CERTS_PATH`");
 
-    let trusted_client_certificates =
-        glob::glob(format!("{}/*.pem", trusted_client_certificates_path))
-            .expect("Globbing for trusted client certificates(*.pem).");
+    let trusted_client_certificates = carrier::util::glob_for_certificates(
+        trusted_client_certificates_path,
+    ).expect("Globbing for trusted client certificates(*.pem).");
 
     let mut evt_loop = Core::new().unwrap();
 

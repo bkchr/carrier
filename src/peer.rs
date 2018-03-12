@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::net::SocketAddr;
 use std::collections::HashMap;
 
-use hole_punch::{plain, Config, Context, Stream};
+use hole_punch::{plain, Config, Context, PubKey, Stream};
 
 use futures::{Future, Poll, Stream as FStream};
 use futures::future::Either;
@@ -19,14 +19,12 @@ use tokio_core::reactor::{Core, Handle};
 type PeerContextPtr = Rc<RefCell<PeerContext>>;
 
 struct PeerContext {
-    name: String,
     services: HashMap<String, Box<Server>>,
 }
 
 impl PeerContext {
-    fn new(name: String) -> PeerContextPtr {
+    fn new() -> PeerContextPtr {
         Rc::new(RefCell::new(PeerContext {
-            name,
             services: HashMap::new(),
         }))
     }
@@ -39,20 +37,23 @@ pub struct PeerBuilder {
 }
 
 impl PeerBuilder {
-    fn new<S: Into<PathBuf>, T: Into<PathBuf>, N: Into<String>>(
+    fn new<S: Into<PathBuf>, T: Into<PathBuf>>(
         handle: &Handle,
         cert_file: S,
         key_file: T,
-        name: N,
+        trusted_server_certificates: Vec<PathBuf>,
+        trusted_client_certificates: Vec<PathBuf>,
     ) -> Result<PeerBuilder> {
-        let config = Config::new(([0, 0, 0, 0], 0).into(), cert_file.into(), key_file.into());
+        let mut config = Config::new(([0, 0, 0, 0], 0).into(), cert_file.into(), key_file.into());
+        config.set_trusted_server_certificates(trusted_server_certificates);
+        config.set_trusted_client_certificates(trusted_client_certificates);
 
         let context = Context::new(handle.clone(), config)?;
 
         Ok(PeerBuilder {
             context,
             handle: handle.clone(),
-            peer_context: PeerContext::new(name.into()),
+            peer_context: PeerContext::new(),
         })
     }
 
@@ -64,46 +65,18 @@ impl PeerBuilder {
             .insert(name.into(), Box::new(service));
     }
 
-    pub fn register(mut self, server: &SocketAddr) -> BuildPeer {
+    pub fn connect(mut self, server: &SocketAddr) -> BuildPeer {
         let peer_context = self.peer_context.clone();
-        let name = peer_context.borrow().name.clone();
         let handle = self.handle.clone();
         let future = self.context
             .create_connection_to_server(server)
             .map_err(|e| e.into())
-            .and_then(move |s| InitialConnection::register(s, name))
-            .flatten()
-            .map(move |s| {
-                Peer::new(
-                    self.handle,
-                    self.context,
-                    self.peer_context,
-                    Connection::new(s, peer_context, handle),
-                )
-            });
-
-        BuildPeer {
-            future: Box::new(future),
-        }
-    }
-
-    pub fn login<S: Into<String> + 'static>(mut self, server: &SocketAddr, pw: S) -> BuildPeer {
-        let peer_context = self.peer_context.clone();
-        let name = peer_context.borrow().name.clone();
-        let handle = self.handle.clone();
-        let future = self.context
-            .create_connection_to_server(server)
-            .map_err(|e| e.into())
-            .and_then(move |s| InitialConnection::login(s, name, pw.into()))
-            .flatten()
-            .map(move |s| {
-                Peer::new(
-                    self.handle,
-                    self.context,
-                    self.peer_context,
-                    Connection::new(s, peer_context, handle),
-                )
-            });
+            .and_then(move |s| {
+                let mut con = Connection::new(s, peer_context, handle);
+                con.send_hello()?;
+                Ok(con)
+            })
+            .map(move |c| Peer::new(self.handle, self.context, self.peer_context, c));
 
         BuildPeer {
             future: Box::new(future),
@@ -150,9 +123,16 @@ impl Peer {
         handle: &Handle,
         cert_file: S,
         key_file: T,
-        name: String,
+        trusted_server_certificates: Vec<PathBuf>,
+        trusted_client_certificates: Vec<PathBuf>,
     ) -> Result<PeerBuilder> {
-        PeerBuilder::new(handle, cert_file, key_file, name)
+        PeerBuilder::new(
+            handle,
+            cert_file,
+            key_file,
+            trusted_server_certificates,
+            trusted_client_certificates,
+        )
     }
 
     pub fn run(self, evt_loop: &mut Core) -> Result<()> {
@@ -163,7 +143,7 @@ impl Peer {
         mut self,
         evt_loop: &mut Core,
         service: S,
-        peer: &str,
+        peer: PubKey,
     ) -> Result<S::Item>
     where
         Error: From<S::Error>,
@@ -174,7 +154,7 @@ impl Peer {
             connection_id,
             self.server_con.stream.as_mut().unwrap(),
             Protocol::ConnectToPeer {
-                name: peer.into(),
+                pub_key: peer,
                 connection_id,
             },
         )?;
@@ -232,6 +212,14 @@ impl Connection {
             handle,
         }
     }
+
+    fn send_hello(&mut self) -> Result<()> {
+        self.stream
+            .as_mut()
+            .unwrap()
+            .send_and_poll(Protocol::Hello)
+            .map_err(|e| e.into())
+    }
 }
 
 impl Future for Connection {
@@ -269,61 +257,6 @@ impl Future for Connection {
                 }
                 Protocol::PeerNotFound => {
                     panic!("Peer not found");
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-struct InitialConnection {
-    stream: Option<Stream<Protocol>>,
-}
-
-impl InitialConnection {
-    fn login(
-        mut stream: Stream<Protocol>,
-        name: String,
-        password: String,
-    ) -> Result<InitialConnection> {
-        stream.send_and_poll(Protocol::Login { name, password })?;
-
-        Ok(InitialConnection {
-            stream: Some(stream),
-        })
-    }
-
-    fn register(mut stream: Stream<Protocol>, name: String) -> Result<InitialConnection> {
-        stream.send_and_poll(Protocol::Register { name })?;
-
-        Ok(InitialConnection {
-            stream: Some(stream),
-        })
-    }
-}
-
-impl Future for InitialConnection {
-    type Item = Stream<Protocol>;
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        loop {
-            let msg = match try_ready!(
-                self.stream
-                    .as_mut()
-                    .expect("can not be polled twice")
-                    .poll()
-            ) {
-                Some(msg) => msg,
-                None => bail!("connection closed while waiting for successful registration/login"),
-            };
-
-            match msg {
-                Protocol::RegisterSuccessFul | Protocol::LoginSuccessful => {
-                    println!("Registration/Login successful");
-                    let mut stream = self.stream.take().unwrap();
-                    stream.upgrade_to_authenticated();
-                    return Ok(Ready(stream));
                 }
                 _ => {}
             }

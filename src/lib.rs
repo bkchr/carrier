@@ -3,6 +3,7 @@ extern crate bytes;
 extern crate failure;
 #[macro_use]
 extern crate futures;
+extern crate glob;
 extern crate hole_punch;
 #[macro_use]
 extern crate lazy_static;
@@ -20,6 +21,7 @@ mod protocol;
 mod server;
 mod peer;
 pub mod service;
+pub mod util;
 
 pub use server::Server;
 pub use peer::Peer;

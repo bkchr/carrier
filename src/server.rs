@@ -74,7 +74,7 @@ impl Server {
         udp_listen_address: SocketAddr,
         trusted_client_certificates: Vec<PathBuf>,
     ) -> Result<Server> {
-        let config = Config::new(udp_listen_address, cert_file.into(), key_file.into());
+        let mut config = Config::new(udp_listen_address, cert_file.into(), key_file.into());
 
         config.set_trusted_client_certificates(trusted_client_certificates);
 
@@ -165,7 +165,7 @@ impl Connection {
                             // should never happen, but how knows
                             self.stream.send_and_poll(Protocol::Error(
                                 "Could not find associated public key!".to_string(),
-                            ));
+                            ))?;
                             return Ok(Ready(()));
                         }
                     };

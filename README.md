@@ -38,12 +38,10 @@ store. The certificates in the store need to be encoded as `PEM` and named `*.pe
 # Running a peer
 
 Execute the following command:
-`CARRIER_CERT_PATH=./src/bin/cert.pem CARRIER_KEY_PATH=./src/bin/key.pem CARRIER_SERVER_ADDR=SERVER_ADDR:SERVER_PORT CARRIER_PEER_NAME=peer cargo run --release --bin carrier-peer`
+`CARRIER_CERT_PATH=./src/bin/cert.pem CARRIER_KEY_PATH=./src/bin/key.pem CARRIER_SERVER_ADDR=SERVER_ADDR:SERVER_PORT cargo run --release --bin carrier-peer`
 
 As the server, the peer requires a certificate. Here applies the same as for the server, never use this certificate/private key
 in production!
-
-The environment variable `CARRIER_PEER_NAME` sets the name of this peer. The name is required to talk to this device over Carrier.
 
 Carrier supports to create multiple services that can be executed over a Carrier connection. By default, a Carrier peer ships with
 `lifeline`. `lifeline` is a service that provides a ssh connection (local running ssh server is required).
@@ -54,13 +52,13 @@ To test lifeline, you should add the following to your `~/.ssh/config`:
 ```
 Host *.carrier
    StrictHostKeyChecking no
-   ProxyCommand PATH_TO_LIFELINE/lifeline $(basename  %h .carrier) CARRIER_SERVER_ADDR:CARRIER_SERVER_PORT
+   ProxyCommand PATH_TO_LIFELINE/lifeline $(basename  %h .carrier) CARRIER_SERVER_ADDR:CARRIER_SERVER_PORT PATH_TO_TRUSTED_SERVER_CERTS PATH_TO_TRUSTED_CLIENT_CERTS
 ```
 
 After you added the snippet to your ssh config, you can execute the following command:
-`ssh peer.carrier` 
+`ssh BF0B90CF27036DA8B3170F4D86D9CC360398B5E9C3A9EB97E72FF57ADE48AB4B.carrier`
 
-That should connect you to your peer named "peer" and give you a ssh connection :)
+That should connect you to your peer with the given public key and give you a ssh connection :)
 
 # License
 

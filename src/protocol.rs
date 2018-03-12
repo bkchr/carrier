@@ -1,19 +1,11 @@
-use hole_punch::ConnectionId;
+use hole_punch::{ConnectionId, PubKey};
 
 #[derive(Deserialize, Serialize, Clone)]
 pub enum Protocol {
-    Register {
-        name: String,
-    },
-    RegisterSuccessFul,
-    Login {
-        name: String,
-        password: String,
-    },
-    LoginSuccessful,
-    LoginFailure(String),
+    Hello,
+    Error(String),
     ConnectToPeer {
-        name: String,
+        pub_key: PubKey,
         connection_id: ConnectionId,
     },
     PeerNotFound,

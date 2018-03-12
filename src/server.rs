@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::net::SocketAddr;
 
-use hole_punch::{Config, Context, Stream, StreamHandle};
+use hole_punch::{Authenticator, Config, Context, PubKey, Stream, StreamHandle};
 
 use futures::{Future, Poll, Stream as FStream};
 use futures::Async::{NotReady, Ready};
@@ -15,7 +15,7 @@ use futures::Async::{NotReady, Ready};
 use tokio_core::reactor::{Core, Handle};
 
 struct ServerContext {
-    devices: HashMap<String, StreamHandle<Protocol>>,
+    devices: HashMap<PubKey, StreamHandle<Protocol>>,
 }
 
 impl ServerContext {
@@ -29,30 +29,33 @@ impl ServerContext {
 type ServerContextPtr = Rc<RefCell<ServerContext>>;
 
 trait ServerContextTrait {
-    fn register_connection(&mut self, name: &str, con: StreamHandle<Protocol>);
+    fn register_connection(&mut self, pub_key: &PubKey, con: StreamHandle<Protocol>);
 
-    fn unregister_connection(&mut self, name: &str);
+    fn unregister_connection(&mut self, pub_key: &PubKey);
 
-    fn get_mut_connection(&mut self, name: &str) -> Option<StreamHandle<Protocol>>;
+    fn get_mut_connection(&mut self, pub_key: &PubKey) -> Option<StreamHandle<Protocol>>;
 }
 
 impl ServerContextTrait for ServerContextPtr {
-    fn register_connection(&mut self, name: &str, con: StreamHandle<Protocol>) {
+    fn register_connection(&mut self, pub_key: &PubKey, con: StreamHandle<Protocol>) {
         if self.borrow_mut()
             .devices
-            .insert(name.to_owned(), con)
+            .insert(pub_key.clone(), con)
             .is_some()
         {
-            println!("overwriting known connection: {}", name);
+            println!("overwriting connection: {}", pub_key);
         }
     }
 
-    fn unregister_connection(&mut self, name: &str) {
-        self.borrow_mut().devices.remove(name);
+    fn unregister_connection(&mut self, pub_key: &PubKey) {
+        self.borrow_mut().devices.remove(pub_key);
     }
 
-    fn get_mut_connection(&mut self, name: &str) -> Option<StreamHandle<Protocol>> {
-        self.borrow_mut().devices.get_mut(name).map(|v| v.clone())
+    fn get_mut_connection(&mut self, pub_key: &PubKey) -> Option<StreamHandle<Protocol>> {
+        self.borrow_mut()
+            .devices
+            .get_mut(pub_key)
+            .map(|v| v.clone())
     }
 }
 
@@ -60,6 +63,7 @@ pub struct Server {
     context: Context<Protocol>,
     handle: Handle,
     server_context: ServerContextPtr,
+    authenticator: Authenticator,
 }
 
 impl Server {
@@ -68,14 +72,18 @@ impl Server {
         cert_file: S,
         key_file: T,
         udp_listen_address: SocketAddr,
+        trusted_client_certificates: Vec<PathBuf>,
     ) -> Result<Server> {
-        let config = Config::new(
-            udp_listen_address,
-            cert_file.into(),
-            key_file.into(),
-        );
+        let config = Config::new(udp_listen_address, cert_file.into(), key_file.into());
+
+        config.set_trusted_client_certificates(trusted_client_certificates);
 
         let context = Context::new(handle.clone(), config)?;
+
+        let authenticator = match context.authenticator() {
+            Some(auth) => auth,
+            None => bail!("No authenticator was created!"),
+        };
 
         let server_context = ServerContext::new();
 
@@ -83,6 +91,7 @@ impl Server {
             context,
             handle: handle.clone(),
             server_context,
+            authenticator,
         })
     }
 
@@ -103,8 +112,11 @@ impl Future for Server {
             };
 
             self.handle.spawn(
-                Connection::new(stream, self.server_context.clone())
-                    .map_err(|e| println!("{:?}", e)),
+                Connection::new(
+                    stream,
+                    self.server_context.clone(),
+                    self.authenticator.clone(),
+                ).map_err(|e| println!("{:?}", e)),
             )
         }
     }
@@ -113,15 +125,21 @@ impl Future for Server {
 struct Connection {
     stream: Stream<Protocol>,
     context: ServerContextPtr,
-    name: Option<String>,
+    authenticator: Authenticator,
+    pub_key: Option<PubKey>,
 }
 
 impl Connection {
-    fn new(stream: Stream<Protocol>, context: ServerContextPtr) -> Connection {
+    fn new(
+        stream: Stream<Protocol>,
+        context: ServerContextPtr,
+        authenticator: Authenticator,
+    ) -> Connection {
         Connection {
             stream,
             context,
-            name: None,
+            authenticator,
+            pub_key: None,
         }
     }
 
@@ -133,24 +151,30 @@ impl Connection {
             };
 
             match msg {
-                Protocol::Login { name, .. } => {
-                    println!("Login: {}", name);
-                    self.stream.send_and_poll(Protocol::LoginSuccessful)?;
-                    self.stream.upgrade_to_authenticated();
-                }
-                Protocol::Register { name } => {
-                    println!("Register: {}", name);
-                    self.context
-                        .register_connection(&name, self.stream.get_stream_handle());
-                    self.name = Some(name);
-                    self.stream.send_and_poll(Protocol::RegisterSuccessFul)?;
-                    self.stream.upgrade_to_authenticated();
+                Protocol::Hello => {
+                    self.pub_key = self.authenticator.client_pub_key(&self.stream);
+
+                    match self.pub_key {
+                        Some(ref key) => {
+                            self.context
+                                .register_connection(key, self.stream.get_stream_handle());
+                            self.stream.upgrade_to_authenticated();
+                            println!("Device registered: {}", key);
+                        }
+                        None => {
+                            // should never happen, but how knows
+                            self.stream.send_and_poll(Protocol::Error(
+                                "Could not find associated public key!".to_string(),
+                            ));
+                            return Ok(Ready(()));
+                        }
+                    };
                 }
                 Protocol::ConnectToPeer {
-                    name,
+                    pub_key,
                     connection_id,
                 } => {
-                    if let Some(mut con) = self.context.get_mut_connection(&name) {
+                    if let Some(mut con) = self.context.get_mut_connection(&pub_key) {
                         self.stream
                             .create_connection_to(connection_id, &mut con)
                             .unwrap();
@@ -175,8 +199,8 @@ impl Future for Connection {
             }
             r @ _ => {
                 // If we got an error or `Ok(Ready(()))`, we unregister the connection
-                if let Some(name) = self.name.take() {
-                    self.context.unregister_connection(&name)
+                if let Some(pub_key) = self.pub_key.take() {
+                    self.context.unregister_connection(&pub_key)
                 };
 
                 r

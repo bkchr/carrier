@@ -21,6 +21,7 @@ After building it, we can run the server:
        -v $(pwd)/src/bin/:/opt/carrier \
        -e CARRIER_CERT_PATH=/opt/carrier/cert.pem \
        -e CARRIER_KEY_PATH=/opt/carrier/key.pem \
+       -e CARRIER_TRUSTED_CLIENT_CERTS_PATH=/opt/carrier/client_certs/ \
        -net host \
        carrier-server
 ```
@@ -30,6 +31,9 @@ the server can be instructed to listen on another port.
 
 The server also requires a certificate/private key. In the example we take the certificate/private key that is
 shipped for testing purposes in this repository. YOU SHOULD NEVER USE THAT IN PRODUCTION!
+
+The peers are required to send a certificate that is signed by one of the certificates given in the `CARRIER_TRUSTED_CLIENT_CERTS_PATH`
+store. The certificates in the store need to be encoded as `PEM` and named `*.pem`.
 
 # Running a peer
 

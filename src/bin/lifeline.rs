@@ -10,7 +10,6 @@ use std::env::args;
 use std::net::SocketAddr;
 
 fn main() {
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
     let mut evt_loop = Core::new().unwrap();
 
     let peer_key = args().nth(1).expect(
@@ -26,12 +25,16 @@ fn main() {
         .parse()
         .expect("Invalid server address");
 
+    let cert = args().nth(3).expect("Please give path to certificate.");
+
+    let key = args().nth(4).expect("Please give path to key.");
+
     let trusted_server_certs_path = args()
-        .nth(3)
+        .nth(5)
         .expect("Please give path to trusted server certificates.");
 
     let trusted_client_certs_path = args()
-        .nth(4)
+        .nth(6)
         .expect("Please give path to trusted client certificates.");
 
     let trusted_server_certificates = carrier::util::glob_for_certificates(
@@ -44,8 +47,8 @@ fn main() {
 
     let builder = carrier::Peer::build(
         &evt_loop.handle(),
-        format!("{}/src/bin/cert.pem", manifest_dir),
-        format!("{}/src/bin/key.pem", manifest_dir),
+        cert,
+        key,
         trusted_server_certificates,
         trusted_client_certificates,
     ).unwrap()

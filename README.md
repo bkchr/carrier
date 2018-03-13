@@ -55,11 +55,14 @@ To test lifeline, you should add the following to your `~/.ssh/config`:
 ```
 Host *.carrier
    StrictHostKeyChecking no
-   ProxyCommand PATH_TO_LIFELINE/lifeline $(basename  %h .carrier) CARRIER_SERVER_ADDR:CARRIER_SERVER_PORT PATH_TO_TRUSTED_SERVER_CERTS PATH_TO_TRUSTED_CLIENT_CERTS
+   ProxyCommand PATH_TO_LIFELINE/lifeline $(basename  %h .carrier) CARRIER_SERVER_ADDR:CARRIER_SERVER_PORT OWN_CERTIFICATE OWN_KEY PATH_TO_TRUSTED_SERVER_CERTS PATH_TO_TRUSTED_CLIENT_CERTS
 ```
 
 After you added the snippet to your ssh config, you can execute the following command:
 `ssh BF0B90CF27036DA8B3170F4D86D9CC360398B5E9C3A9EB97E72FF57ADE48AB4B.carrier`
+
+The `PATH_TO_TRUSTED_SERVER_CERTS` needs to contain the certificates for connecting to the `carrier-server` and the certificates of the
+peers. The local peer will treat remote peers as they would be normal server.
 
 That should connect you to your peer with the given public key and give you a ssh connection :)
 

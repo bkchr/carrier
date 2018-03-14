@@ -41,6 +41,10 @@ fn main() {
     ).unwrap();
 
     carrier::service::register_builtin_services(&mut builder);
+
+    println!("Peer connects to server({})", server_addr);
     let peer = evt_loop.run(builder.connect(&server_addr)).unwrap();
+
+    println!("Peer running");
     peer.run(&mut evt_loop).unwrap();
 }

@@ -13,19 +13,19 @@ fn main() {
     let key_path = var("CARRIER_KEY_PATH")
         .expect("Please give path to private key file via `CARRIER_KEY_PATH`");
 
-    let trusted_client_certificates_path = var("CARRIER_TRUSTED_CLIENT_CERTS_PATH")
-        .expect("Please give path to the trusted client certificates(*.pem) via `CARRIER_TRUSTED_CLIENT_CERTS_PATH`");
+    let client_ca_path = var("CARRIER_CLIENT_CA_PATH").expect(
+        "Please give path to client certificate authorities(*.pem) via `CARRIER_CLIENT_CA_PATH`",
+    );
 
-    let trusted_server_certificates_path = var("CARRIER_TRUSTED_SERVER_CERTS_PATH")
-        .expect("Please give path to the trusted server certificates(*.pem) via `CARRIER_TRUSTED_SERVER_CERTS_PATH`");
+    let server_ca_path = var("CARRIER_SERVER_CA_PATH").expect(
+        "Please give path to server certificate authorities(*.pem) via `CARRIER_SERVER_CA_PATH`",
+    );
 
-    let trusted_client_certificates = carrier::util::glob_for_certificates(
-        trusted_client_certificates_path,
-    ).expect("Globbing for trusted client certificates(*.pem).");
+    let client_ca_vec = carrier::util::glob_for_certificates(client_ca_path)
+        .expect("Globbing for client certificate authorities(*.pem).");
 
-    let trusted_server_certificates = carrier::util::glob_for_certificates(
-        trusted_server_certificates_path,
-    ).expect("Globbing for trusted server certificates(*.pem).");
+    let server_ca_vec = carrier::util::glob_for_certificates(server_ca_path)
+        .expect("Globbing for server certificate authorities(*.pem).");
 
     let mut evt_loop = Core::new().unwrap();
 
@@ -33,8 +33,8 @@ fn main() {
         &evt_loop.handle(),
         certificate_path,
         key_path,
-        trusted_server_certificates,
-        trusted_client_certificates,
+        server_ca_vec,
+        client_ca_vec,
     ).unwrap();
 
     carrier::service::register_builtin_services(&mut builder);

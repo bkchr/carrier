@@ -14,12 +14,12 @@ fn main() {
         .map(|v| v.parse())
         .unwrap_or(Ok(22222))
         .expect("Integer value for `CARRIER_LISTEN_PORT`");
-    let trusted_client_certificates_path = var("CARRIER_TRUSTED_CLIENT_CERTS_PATH")
-        .expect("Please give path to the trusted client certificates(*.pem) via `CARRIER_TRUSTED_CLIENT_CERTS_PATH`");
+    let client_ca_path = var("CARRIER_CLIENT_CA_PATH").expect(
+        "Please give path to client certificate authorities(*.pem) via `CARRIER_CLIENT_CA_PATH`",
+    );
 
-    let trusted_client_certificates = carrier::util::glob_for_certificates(
-        trusted_client_certificates_path,
-    ).expect("Globbing for trusted client certificates(*.pem).");
+    let client_ca_vec = carrier::util::glob_for_certificates(client_ca_path)
+        .expect("Globbing for client certificate authorities(*.pem).");
 
     let mut evt_loop = Core::new().unwrap();
 
@@ -28,7 +28,7 @@ fn main() {
         certificate_path,
         key_path,
         ([0, 0, 0, 0], listen_port).into(),
-        trusted_client_certificates,
+        client_ca_vec,
     ).unwrap();
 
     server.run(&mut evt_loop).unwrap();

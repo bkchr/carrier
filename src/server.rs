@@ -72,11 +72,11 @@ impl Server {
         cert_file: S,
         key_file: T,
         udp_listen_address: SocketAddr,
-        trusted_client_certificates: Vec<PathBuf>,
+        client_ca_vec: Vec<PathBuf>,
     ) -> Result<Server> {
         let mut config = Config::new(udp_listen_address, cert_file.into(), key_file.into());
 
-        config.set_trusted_client_certificates(trusted_client_certificates);
+        config.set_trusted_client_certificates(client_ca_vec);
 
         let context = Context::new(handle.clone(), config)?;
 

@@ -42,12 +42,12 @@ impl PeerBuilder {
         handle: &Handle,
         cert_file: S,
         key_file: T,
-        trusted_server_certificates: Vec<PathBuf>,
-        trusted_client_certificates: Vec<PathBuf>,
+        server_ca_vec: Vec<PathBuf>,
+        client_ca_vec: Vec<PathBuf>,
     ) -> Result<PeerBuilder> {
         let mut config = Config::new(([0, 0, 0, 0], 0).into(), cert_file.into(), key_file.into());
-        config.set_trusted_server_certificates(trusted_server_certificates);
-        config.set_trusted_client_certificates(trusted_client_certificates);
+        config.set_trusted_server_certificates(server_ca_vec);
+        config.set_trusted_client_certificates(client_ca_vec);
 
         let context = Context::new(handle.clone(), config)?;
 
@@ -129,15 +129,15 @@ impl Peer {
         handle: &Handle,
         cert_file: S,
         key_file: T,
-        trusted_server_certificates: Vec<PathBuf>,
-        trusted_client_certificates: Vec<PathBuf>,
+        server_ca_vec: Vec<PathBuf>,
+        client_ca_vec: Vec<PathBuf>,
     ) -> Result<PeerBuilder> {
         PeerBuilder::new(
             handle,
             cert_file,
             key_file,
-            trusted_server_certificates,
-            trusted_client_certificates,
+            server_ca_vec,
+            client_ca_vec,
         )
     }
 

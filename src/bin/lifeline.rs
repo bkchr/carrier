@@ -26,29 +26,22 @@ fn main() {
 
     let key = args().nth(4).expect("Please give path to key.");
 
-    let trusted_server_certs_path = args()
+    let client_ca_path = args()
         .nth(5)
-        .expect("Please give path to trusted server certificates.");
+        .expect("Please give path to client certificate authorities(*.pem)");
 
-    let trusted_client_certs_path = args()
+    let server_ca_path = args()
         .nth(6)
-        .expect("Please give path to trusted client certificates.");
+        .expect("Please give path to server certificate authorities(*.pem)");
 
-    let trusted_server_certificates = carrier::util::glob_for_certificates(
-        trusted_server_certs_path,
-    ).expect("Globbing for trusted server certificates(*.pem).");
+    let client_ca_vec = carrier::util::glob_for_certificates(client_ca_path)
+        .expect("Globbing for client certificate authorities(*.pem).");
 
-    let trusted_client_certificates = carrier::util::glob_for_certificates(
-        trusted_client_certs_path,
-    ).expect("Globbing for trusted client certificates(*.pem).");
+    let server_ca_vec = carrier::util::glob_for_certificates(server_ca_path)
+        .expect("Globbing for server certificate authorities(*.pem).");
 
-    let builder = carrier::Peer::build(
-        &evt_loop.handle(),
-        cert,
-        key,
-        trusted_server_certificates,
-        trusted_client_certificates,
-    ).unwrap()
+    let builder = carrier::Peer::build(&evt_loop.handle(), cert, key, server_ca_vec, client_ca_vec)
+        .unwrap()
         .connect(&server_addr)
         .unwrap();
 

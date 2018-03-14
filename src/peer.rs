@@ -5,8 +5,9 @@ use service::{Client, Server};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::net::SocketAddr;
+use std::net::ToSocketAddrs;
 use std::collections::HashMap;
+use std::fmt::Display;
 
 use hole_punch::{plain, Config, Context, PubKey, Stream};
 
@@ -65,11 +66,16 @@ impl PeerBuilder {
             .insert(name.into(), Box::new(service));
     }
 
-    pub fn connect(mut self, server: &SocketAddr) -> BuildPeer {
+    pub fn connect<A: ToSocketAddrs + Display>(mut self, server: &A) -> Result<BuildPeer> {
+        let server = match server.to_socket_addrs()?.nth(0) {
+            Some(addr) => addr,
+            None => bail!("Could not resolve any socket address from {}.", server),
+        };
+
         let peer_context = self.peer_context.clone();
         let handle = self.handle.clone();
         let future = self.context
-            .create_connection_to_server(server)
+            .create_connection_to_server(&server)
             .map_err(|e| e.into())
             .and_then(move |s| {
                 let mut con = Connection::new(s, peer_context, handle);
@@ -78,9 +84,9 @@ impl PeerBuilder {
             })
             .map(move |c| Peer::new(self.handle, self.context, self.peer_context, c));
 
-        BuildPeer {
+        Ok(BuildPeer {
             future: Box::new(future),
-        }
+        })
     }
 }
 

@@ -4,13 +4,10 @@ extern crate tokio_core;
 use tokio_core::reactor::Core;
 
 use std::env::var;
-use std::net::SocketAddr;
 
 fn main() {
-    let server_addr: SocketAddr = var("CARRIER_SERVER_ADDR")
-        .expect("Please give carrier server address via `CARRIER_SERVER_ADDR`")
-        .parse()
-        .expect("Invalid server address");
+    let server_addr = var("CARRIER_SERVER_ADDR")
+        .expect("Please give carrier server address via `CARRIER_SERVER_ADDR`");
     let certificate_path =
         var("CARRIER_CERT_PATH").expect("Please give path to cert file via `CARRIER_CERT_PATH`");
     let key_path = var("CARRIER_KEY_PATH")
@@ -42,8 +39,10 @@ fn main() {
 
     carrier::service::register_builtin_services(&mut builder);
 
-    println!("Peer connects to server({})", server_addr);
-    let peer = evt_loop.run(builder.connect(&server_addr)).unwrap();
+    println!("Peer connects to bearer({})", server_addr);
+    let peer = evt_loop
+        .run(builder.connect(&server_addr).unwrap())
+        .unwrap();
 
     println!("Peer running");
     peer.run(&mut evt_loop).unwrap();

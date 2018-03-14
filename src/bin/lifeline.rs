@@ -7,7 +7,6 @@ use carrier::service;
 use tokio_core::reactor::Core;
 
 use std::env::args;
-use std::net::SocketAddr;
 
 fn main() {
     let mut evt_loop = Core::new().unwrap();
@@ -19,11 +18,9 @@ fn main() {
     let peer_key = hole_punch::PubKey::from_hashed_hex(&peer_key)
         .expect("Creates public key from hashed hex.");
 
-    let server_addr: SocketAddr = args()
+    let server_addr = args()
         .nth(2)
-        .expect("Please give carrier server address as second argument.")
-        .parse()
-        .expect("Invalid server address");
+        .expect("Please give carrier server address as second argument.");
 
     let cert = args().nth(3).expect("Please give path to certificate.");
 
@@ -52,7 +49,8 @@ fn main() {
         trusted_server_certificates,
         trusted_client_certificates,
     ).unwrap()
-        .connect(&server_addr);
+        .connect(&server_addr)
+        .unwrap();
 
     let peer = evt_loop.run(builder).unwrap();
 

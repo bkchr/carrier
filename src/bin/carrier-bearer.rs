@@ -31,5 +31,6 @@ fn main() {
         client_ca_vec,
     ).unwrap();
 
+    println!("Bearer running (Port: {})", listen_port);
     server.run(&mut evt_loop).unwrap();
 }

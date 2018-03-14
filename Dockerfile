@@ -6,4 +6,4 @@ RUN apt install -y clang libssl-dev
 WORKDIR /usr/src/carrier
 COPY . .
 RUN cargo install
-CMD ["carrier-server"]
+CMD ["carrier-bearer"]

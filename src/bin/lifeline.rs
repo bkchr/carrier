@@ -40,9 +40,12 @@ fn main() {
     let server_ca_vec = carrier::util::glob_for_certificates(server_ca_path)
         .expect("Globbing for server certificate authorities(*.pem).");
 
-    let builder = carrier::Peer::build(&evt_loop.handle(), cert, key, server_ca_vec, client_ca_vec)
-        .unwrap()
-        .connect(&server_addr)
+    let builder = carrier::Peer::builder(&evt_loop.handle())
+        .set_cert_chain_file(cert)
+        .set_private_key_file(key)
+        .set_client_ca_cert_files(client_ca_vec)
+        .set_server_ca_cert_files(server_ca_vec)
+        .build(&server_addr)
         .unwrap();
 
     let peer = evt_loop.run(builder).unwrap();

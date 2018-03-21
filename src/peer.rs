@@ -38,44 +38,44 @@ pub struct PeerBuilder {
 }
 
 impl PeerBuilder {
-    fn new(handle: &Handle) -> Result<PeerBuilder> {
+    fn new(handle: &Handle) -> PeerBuilder {
         let config = Config::new();
 
-        Ok(PeerBuilder {
+        PeerBuilder {
             config,
             handle: handle.clone(),
             peer_context: PeerContext::new(),
-        })
+        }
     }
 
     /// Set the TLS certificate filename.
-    pub fn set_cert_chain_filename<C: Into<PathBuf>>(&mut self, path: C) -> &mut PeerBuilder {
+    pub fn set_cert_chain_file<C: Into<PathBuf>>(mut self, path: C) -> PeerBuilder {
         self.config.set_cert_chain_filename(path);
         self
     }
 
     /// Set the TLS private key filename.
-    pub fn set_private_key_filename<K: Into<PathBuf>>(&mut self, path: K) -> &mut PeerBuilder {
+    pub fn set_private_key_file<K: Into<PathBuf>>(mut self, path: K) -> PeerBuilder {
         self.config.set_key_filename(path);
         self
     }
 
     /// Set the TLS certificate chain for this peer from memory.
     /// This will overwrite any prior call to `set_cert_chain_filename`.
-    pub fn set_cert_chain(&mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> &mut PeerBuilder {
+    pub fn set_cert_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> PeerBuilder {
         self.config.set_cert_chain(chain, format);
         self
     }
 
     /// Set the TLS private key for this peer from memory.
     /// This will overwrite any prior call to `set_private_key_filename`.
-    pub fn set_private_key(&mut self, key: Vec<u8>, format: FileFormat) -> &mut PeerBuilder {
+    pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> PeerBuilder {
         self.config.set_key(key, format);
         self
     }
 
     /// Register the given service at this peer.
-    pub fn register_service<S: Server + 'static>(&mut self, service: S) -> &mut PeerBuilder {
+    pub fn register_service<S: Server + 'static>(self, service: S) -> PeerBuilder {
         let name = service.name();
         self.peer_context
             .borrow_mut()
@@ -87,7 +87,7 @@ impl PeerBuilder {
     /// Set the client CA certificate files.
     /// These CAs will be used to authenticate connecting clients.
     /// When these CAs are not given, all clients will be authenticated successfully.
-    pub fn set_client_ca_certificate_files(&mut self, files: Vec<PathBuf>) -> &mut PeerBuilder {
+    pub fn set_client_ca_cert_files(mut self, files: Vec<PathBuf>) -> PeerBuilder {
         self.config.set_client_ca_certificates(files);
         self
     }
@@ -95,14 +95,15 @@ impl PeerBuilder {
     /// Set the server CA certificate files.
     /// These CAs will be used to authenticate servers.
     /// When these CAs are not given, all server will be trusted.
-    pub fn set_server_ca_certificate_files(&mut self, files: Vec<PathBuf>) -> &mut PeerBuilder {
+    pub fn set_server_ca_cert_files(mut self, files: Vec<PathBuf>) -> PeerBuilder {
         self.config.set_server_ca_certificates(files);
         self
     }
 
-    /// Connects to the given server.
-    /// Returns a future that resolves to a peer, if the connection could be initiated successfully.
-    pub fn connect<A: ToSocketAddrs + Display>(self, server: &A) -> Result<BuildPeer> {
+    /// Connects to the given server and builds the `Peer` instance.
+    /// Returns a future that resolves to a `Peer` instance, if the connection could be initiated
+    /// successfully.
+    pub fn build<A: ToSocketAddrs + Display>(self, server: &A) -> Result<BuildPeer> {
         let server = match server.to_socket_addrs()?.nth(0) {
             Some(addr) => addr,
             None => bail!("Could not resolve any socket address from {}.", server),
@@ -165,7 +166,7 @@ impl Peer {
     }
 
     /// Create a `PeerBuilder` for building a `Peer` instance.
-    pub fn builder(handle: &Handle) -> Result<PeerBuilder> {
+    pub fn builder(handle: &Handle) -> PeerBuilder {
         PeerBuilder::new(handle)
     }
 

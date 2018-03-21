@@ -74,43 +74,43 @@ impl ServerBuilder {
 
     /// Set the address where quic should listen on.
     /// This overwrites any prior call to `set_quic_listen_port`.
-    pub fn set_quic_listen_address(&mut self, address: SocketAddr) -> &mut ServerBuilder {
+    pub fn set_quic_listen_address(mut self, address: SocketAddr) -> ServerBuilder {
         self.config.set_quic_listen_address(address);
         self
     }
 
     /// Set the port where quic should listen on (all interfaces).
-    pub fn set_quic_listen_port(&mut self, port: u16) -> &mut ServerBuilder {
+    pub fn set_quic_listen_port(mut self, port: u16) -> ServerBuilder {
         self.config.set_quic_listen_port(port);
         self
     }
 
     /// Set the TLS certificate chain file (in PEM format).
-    pub fn set_certificate_chain_file<C: Into<PathBuf>>(&mut self, path: C) -> &mut ServerBuilder {
+    pub fn set_cert_chain_file<C: Into<PathBuf>>(mut self, path: C) -> ServerBuilder {
         self.config.set_cert_chain_filename(path);
         self
     }
 
     /// Set the TLS certificate chain.
     /// This will overwrite any prior call to `set_certificate_chain_file`.
-    pub fn set_certificate_chain(
-        &mut self,
+    pub fn set_cert_chain(
+        mut self,
         chain: Vec<Vec<u8>>,
         format: FileFormat,
-    ) -> &mut ServerBuilder {
+    ) -> ServerBuilder {
         self.config.set_cert_chain(chain, format);
         self
     }
 
     /// Set the TLS private key file (in PEM format).
-    pub fn set_private_key_file<P: Into<PathBuf>>(&mut self, path: P) -> &mut ServerBuilder {
+    pub fn set_private_key_file<P: Into<PathBuf>>(mut self, path: P) -> ServerBuilder {
         self.config.set_key_filename(path);
         self
     }
 
     /// Set the TLS private key.
     /// This will overwrite any prior call to `set_private_key_file`.
-    pub fn set_private_key(&mut self, key: Vec<u8>, format: FileFormat) -> &mut ServerBuilder {
+    pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> ServerBuilder {
         self.config.set_key(key, format);
         self
     }
@@ -118,7 +118,7 @@ impl ServerBuilder {
     /// Set the client CA certificate files.
     /// These CAs will be used to authenticate connecting clients.
     /// When these CAs are not given, all clients will be authenticated successfully.
-    pub fn set_client_ca_certificate_files(&mut self, files: Vec<PathBuf>) -> &mut ServerBuilder {
+    pub fn set_client_ca_cert_files(mut self, files: Vec<PathBuf>) -> ServerBuilder {
         self.config.set_client_ca_certificates(files);
         self
     }

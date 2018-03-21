@@ -23,13 +23,12 @@ fn main() {
 
     let mut evt_loop = Core::new().unwrap();
 
-    let server = carrier::Server::new(
-        &evt_loop.handle(),
-        certificate_path,
-        key_path,
-        ([0, 0, 0, 0], listen_port).into(),
-        client_ca_vec,
-    ).unwrap();
+    let server = carrier::Server::builder(&evt_loop.handle())
+        .set_cert_chain_file(certificate_path)
+        .set_private_key_file(key_path)
+        .set_client_ca_cert_files(client_ca_vec)
+        .build()
+        .unwrap();
 
     println!("Bearer running (Port: {})", listen_port);
     server.run(&mut evt_loop).unwrap();

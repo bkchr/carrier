@@ -9,7 +9,7 @@ use std::net::ToSocketAddrs;
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use hole_punch::{plain, Config, FileFormat, Context, PubKey, Stream};
+use hole_punch::{plain, Config, Context, FileFormat, PubKey, Stream};
 
 use futures::{Future, Poll, Stream as FStream};
 use futures::future::Either;
@@ -38,14 +38,8 @@ pub struct PeerBuilder {
 }
 
 impl PeerBuilder {
-    fn new(
-        handle: &Handle,
-        server_ca_vec: Vec<PathBuf>,
-        client_ca_vec: Vec<PathBuf>,
-    ) -> Result<PeerBuilder> {
-        let mut config = Config::new();
-        config.set_server_ca_certificates(server_ca_vec);
-        config.set_client_ca_certificates(client_ca_vec);
+    fn new(handle: &Handle) -> Result<PeerBuilder> {
+        let config = Config::new();
 
         Ok(PeerBuilder {
             config,
@@ -55,47 +49,70 @@ impl PeerBuilder {
     }
 
     /// Set the TLS certificate filename.
-    pub fn set_cert_chain_filename<C: Into<PathBuf>>(&mut self, path: C) {
+    pub fn set_cert_chain_filename<C: Into<PathBuf>>(&mut self, path: C) -> &mut PeerBuilder {
         self.config.set_cert_chain_filename(path);
+        self
     }
 
     /// Set the TLS private key filename.
-    pub fn set_private_key_filename<K: Into<PathBuf>>(&mut self, path: K) {
+    pub fn set_private_key_filename<K: Into<PathBuf>>(&mut self, path: K) -> &mut PeerBuilder {
         self.config.set_key_filename(path);
+        self
     }
 
     /// Set the TLS certificate chain for this peer from memory.
     /// This will overwrite any prior call to `set_cert_chain_filename`.
-    pub fn set_cert_chain(&mut self, chain: Vec<Vec<u8>>, format: FileFormat) {
+    pub fn set_cert_chain(&mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> &mut PeerBuilder {
         self.config.set_cert_chain(chain, format);
+        self
     }
 
     /// Set the TLS private key for this peer from memory.
     /// This will overwrite any prior call to `set_private_key_filename`.
-    pub fn set_private_key(&mut self, key: Vec<u8>, format: FileFormat) {
+    pub fn set_private_key(&mut self, key: Vec<u8>, format: FileFormat) -> &mut PeerBuilder {
         self.config.set_key(key, format);
+        self
     }
 
     /// Register the given service at this peer.
-    pub fn register_service<S: Server + 'static>(&mut self, service: S) {
+    pub fn register_service<S: Server + 'static>(&mut self, service: S) -> &mut PeerBuilder {
         let name = service.name();
         self.peer_context
             .borrow_mut()
             .services
             .insert(name.into(), Box::new(service));
+        self
+    }
+
+    /// Set the client CA certificate files.
+    /// These CAs will be used to authenticate connecting clients.
+    /// When these CAs are not given, all clients will be authenticated successfully.
+    pub fn set_client_ca_certificate_files(&mut self, files: Vec<PathBuf>) -> &mut PeerBuilder {
+        self.config.set_client_ca_certificates(files);
+        self
+    }
+
+    /// Set the server CA certificate files.
+    /// These CAs will be used to authenticate servers.
+    /// When these CAs are not given, all server will be trusted.
+    pub fn set_server_ca_certificate_files(&mut self, files: Vec<PathBuf>) -> &mut PeerBuilder {
+        self.config.set_server_ca_certificates(files);
+        self
     }
 
     /// Connects to the given server.
     /// Returns a future that resolves to a peer, if the connection could be initiated successfully.
-    pub fn connect<A: ToSocketAddrs + Display>(mut self, server: &A) -> Result<BuildPeer> {
+    pub fn connect<A: ToSocketAddrs + Display>(self, server: &A) -> Result<BuildPeer> {
         let server = match server.to_socket_addrs()?.nth(0) {
             Some(addr) => addr,
             None => bail!("Could not resolve any socket address from {}.", server),
         };
 
         let peer_context = self.peer_context.clone();
+        let peer_context2 = self.peer_context;
         let mut context = Context::new(self.handle.clone(), self.config)?;
         let handle = self.handle.clone();
+        let handle2 = self.handle;
         let future = context
             .create_connection_to_server(&server)
             .map_err(|e| e.into())
@@ -104,7 +121,7 @@ impl PeerBuilder {
                 con.send_hello()?;
                 Ok(con)
             })
-            .map(move |c| Peer::new(self.handle, context, self.peer_context, c));
+            .map(move |c| Peer::new(handle2, context, peer_context2, c));
 
         Ok(BuildPeer {
             future: Box::new(future),
@@ -147,22 +164,17 @@ impl Peer {
         }
     }
 
-    pub fn build(
-        handle: &Handle,
-        server_ca_vec: Vec<PathBuf>,
-        client_ca_vec: Vec<PathBuf>,
-    ) -> Result<PeerBuilder> {
-        PeerBuilder::new(
-            handle,
-            server_ca_vec,
-            client_ca_vec,
-        )
+    /// Create a `PeerBuilder` for building a `Peer` instance.
+    pub fn builder(handle: &Handle) -> Result<PeerBuilder> {
+        PeerBuilder::new(handle)
     }
 
+    /// Run this `Peer`.
     pub fn run(self, evt_loop: &mut Core) -> Result<()> {
         evt_loop.run(self)
     }
 
+    /// Connect to the given `Peer` and run the given `Service` (locally and remotely).
     pub fn run_service<S: Client>(
         mut self,
         evt_loop: &mut Core,

@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::net::SocketAddr;
 
-use hole_punch::{Authenticator, Config, Context, PubKey, Stream, StreamHandle};
+use hole_punch::{Authenticator, Config, Context, FileFormat, PubKey, Stream, StreamHandle};
 
 use futures::{Future, Poll, Stream as FStream};
 use futures::Async::{NotReady, Ready};
@@ -59,6 +59,86 @@ impl ServerContextTrait for ServerContextPtr {
     }
 }
 
+pub struct ServerBuilder {
+    config: Config,
+    handle: Handle,
+}
+
+impl ServerBuilder {
+    fn new(handle: &Handle) -> ServerBuilder {
+        ServerBuilder {
+            config: Config::new(),
+            handle: handle.clone(),
+        }
+    }
+
+    /// Set the address where quic should listen on.
+    /// This overwrites any prior call to `set_quic_listen_port`.
+    pub fn set_quic_listen_address(&mut self, address: SocketAddr) -> &mut ServerBuilder {
+        self.config.set_quic_listen_address(address);
+        self
+    }
+
+    /// Set the port where quic should listen on (all interfaces).
+    pub fn set_quic_listen_port(&mut self, port: u16) -> &mut ServerBuilder {
+        self.config.set_quic_listen_port(port);
+        self
+    }
+
+    /// Set the TLS certificate chain file (in PEM format).
+    pub fn set_certificate_chain_file<C: Into<PathBuf>>(&mut self, path: C) -> &mut ServerBuilder {
+        self.config.set_cert_chain_filename(path);
+        self
+    }
+
+    /// Set the TLS certificate chain.
+    /// This will overwrite any prior call to `set_certificate_chain_file`.
+    pub fn set_certificate_chain(
+        &mut self,
+        chain: Vec<Vec<u8>>,
+        format: FileFormat,
+    ) -> &mut ServerBuilder {
+        self.config.set_cert_chain(chain, format);
+        self
+    }
+
+    /// Set the TLS private key file (in PEM format).
+    pub fn set_private_key_file<P: Into<PathBuf>>(&mut self, path: P) -> &mut ServerBuilder {
+        self.config.set_key_filename(path);
+        self
+    }
+
+    /// Set the TLS private key.
+    /// This will overwrite any prior call to `set_private_key_file`.
+    pub fn set_private_key(&mut self, key: Vec<u8>, format: FileFormat) -> &mut ServerBuilder {
+        self.config.set_key(key, format);
+        self
+    }
+
+    /// Set the client CA certificate files.
+    /// These CAs will be used to authenticate connecting clients.
+    /// When these CAs are not given, all clients will be authenticated successfully.
+    pub fn set_client_ca_certificate_files(&mut self, files: Vec<PathBuf>) -> &mut ServerBuilder {
+        self.config.set_client_ca_certificates(files);
+        self
+    }
+
+    /// Build the `Server` instance.
+    pub fn build(self) -> Result<Server> {
+        if self.config.quic_config.cert_chain.is_none()
+            && self.config.quic_config.cert_chain_filename.is_none()
+        {
+            bail!("The server requires a certificate.");
+        }
+
+        if self.config.quic_config.key.is_none() && self.config.quic_config.key_filename.is_none() {
+            bail!("The server requires a private key.");
+        }
+
+        Server::new(self.handle, self.config)
+    }
+}
+
 pub struct Server {
     context: Context<Protocol>,
     handle: Handle,
@@ -67,17 +147,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new<S: Into<PathBuf>, T: Into<PathBuf>>(
-        handle: &Handle,
-        cert_file: S,
-        key_file: T,
-        udp_listen_address: SocketAddr,
-        client_ca_vec: Vec<PathBuf>,
-    ) -> Result<Server> {
-        let mut config = Config::new(udp_listen_address, cert_file.into(), key_file.into());
-
-        config.set_trusted_client_certificates(client_ca_vec);
-
+    fn new(handle: Handle, config: Config) -> Result<Server> {
         let context = Context::new(handle.clone(), config)?;
 
         let authenticator = match context.authenticator() {
@@ -89,12 +159,18 @@ impl Server {
 
         Ok(Server {
             context,
-            handle: handle.clone(),
+            handle,
             server_context,
             authenticator,
         })
     }
 
+    /// Creates a `ServerBuilder` for building a server instance.
+    pub fn builder(handle: &Handle) -> ServerBuilder {
+        ServerBuilder::new(handle)
+    }
+
+    /// Run this `Server`.
     pub fn run(self, evt_loop: &mut Core) -> Result<()> {
         evt_loop.run(self)
     }

@@ -9,7 +9,7 @@ use std::net::ToSocketAddrs;
 use std::collections::HashMap;
 use std::fmt::Display;
 
-use hole_punch::{plain, Config, Context, PubKey, Stream};
+use hole_punch::{plain, Config, FileFormat, Context, PubKey, Stream};
 
 use futures::{Future, Poll, Stream as FStream};
 use futures::future::Either;
@@ -32,32 +32,51 @@ impl PeerContext {
 }
 
 pub struct PeerBuilder {
-    context: Context<Protocol>,
+    config: Config,
     handle: Handle,
     peer_context: PeerContextPtr,
 }
 
 impl PeerBuilder {
-    fn new<S: Into<PathBuf>, T: Into<PathBuf>>(
+    fn new(
         handle: &Handle,
-        cert_file: S,
-        key_file: T,
         server_ca_vec: Vec<PathBuf>,
         client_ca_vec: Vec<PathBuf>,
     ) -> Result<PeerBuilder> {
-        let mut config = Config::new(([0, 0, 0, 0], 0).into(), cert_file.into(), key_file.into());
-        config.set_trusted_server_certificates(server_ca_vec);
-        config.set_trusted_client_certificates(client_ca_vec);
-
-        let context = Context::new(handle.clone(), config)?;
+        let mut config = Config::new();
+        config.set_server_ca_certificates(server_ca_vec);
+        config.set_client_ca_certificates(client_ca_vec);
 
         Ok(PeerBuilder {
-            context,
+            config,
             handle: handle.clone(),
             peer_context: PeerContext::new(),
         })
     }
 
+    /// Set the TLS certificate filename.
+    pub fn set_cert_chain_filename<C: Into<PathBuf>>(&mut self, path: C) {
+        self.config.set_cert_chain_filename(path);
+    }
+
+    /// Set the TLS private key filename.
+    pub fn set_private_key_filename<K: Into<PathBuf>>(&mut self, path: K) {
+        self.config.set_key_filename(path);
+    }
+
+    /// Set the TLS certificate chain for this peer from memory.
+    /// This will overwrite any prior call to `set_cert_chain_filename`.
+    pub fn set_cert_chain(&mut self, chain: Vec<Vec<u8>>, format: FileFormat) {
+        self.config.set_cert_chain(chain, format);
+    }
+
+    /// Set the TLS private key for this peer from memory.
+    /// This will overwrite any prior call to `set_private_key_filename`.
+    pub fn set_private_key(&mut self, key: Vec<u8>, format: FileFormat) {
+        self.config.set_key(key, format);
+    }
+
+    /// Register the given service at this peer.
     pub fn register_service<S: Server + 'static>(&mut self, service: S) {
         let name = service.name();
         self.peer_context
@@ -66,6 +85,8 @@ impl PeerBuilder {
             .insert(name.into(), Box::new(service));
     }
 
+    /// Connects to the given server.
+    /// Returns a future that resolves to a peer, if the connection could be initiated successfully.
     pub fn connect<A: ToSocketAddrs + Display>(mut self, server: &A) -> Result<BuildPeer> {
         let server = match server.to_socket_addrs()?.nth(0) {
             Some(addr) => addr,
@@ -73,8 +94,9 @@ impl PeerBuilder {
         };
 
         let peer_context = self.peer_context.clone();
+        let mut context = Context::new(self.handle.clone(), self.config)?;
         let handle = self.handle.clone();
-        let future = self.context
+        let future = context
             .create_connection_to_server(&server)
             .map_err(|e| e.into())
             .and_then(move |s| {
@@ -82,7 +104,7 @@ impl PeerBuilder {
                 con.send_hello()?;
                 Ok(con)
             })
-            .map(move |c| Peer::new(self.handle, self.context, self.peer_context, c));
+            .map(move |c| Peer::new(self.handle, context, self.peer_context, c));
 
         Ok(BuildPeer {
             future: Box::new(future),
@@ -125,17 +147,13 @@ impl Peer {
         }
     }
 
-    pub fn build<S: Into<PathBuf>, T: Into<PathBuf>>(
+    pub fn build(
         handle: &Handle,
-        cert_file: S,
-        key_file: T,
         server_ca_vec: Vec<PathBuf>,
         client_ca_vec: Vec<PathBuf>,
     ) -> Result<PeerBuilder> {
         PeerBuilder::new(
             handle,
-            cert_file,
-            key_file,
             server_ca_vec,
             client_ca_vec,
         )

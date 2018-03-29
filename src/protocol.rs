@@ -1,18 +1,31 @@
 use hole_punch::{ConnectionId, PubKey};
 
+/// The carrier protocol that is used to communicate between the peers and the peers and
+/// the bearers.
 #[derive(Deserialize, Serialize, Clone)]
 pub enum Protocol {
+    /// Hello, I'm a peer.
     Hello,
-    Error(String),
+    /// An error occurred.
+    Error { msg: String },
+    /// Connect to this peer to the given peer.
     ConnectToPeer {
         pub_key: PubKey,
         connection_id: ConnectionId,
     },
+    /// The requested peer could not be found.
     PeerNotFound,
-    AlreadyConnected,
+    /// Request a connection to the given service.
+    /// If the service is available on the peer, a `ServiceConnectionEstablished` will be send and
+    /// the connection will be forwarded to the service. The connection is afterwards only usable
+    /// by the service.
     RequestService {
         name: String,
     },
+    /// The requested service could not be found on the peer.
     ServiceNotFound,
-    ServiceConBuild,
+    /// The requested service is available on the peer and any further messages will be routed
+    /// to this service. The peer that receives this message, should start the service client
+    /// with the current connection.
+    ServiceConnectionEstablished,
 }

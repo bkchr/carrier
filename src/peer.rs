@@ -282,7 +282,7 @@ impl Future for Connection {
                         self.stream
                             .as_mut()
                             .unwrap()
-                            .send_and_poll(Protocol::ServiceConBuild)?;
+                            .send_and_poll(Protocol::ServiceConnectionEstablished)?;
                         service.spawn(&self.handle, self.stream.take().unwrap().into_plain())?;
                         return Ok(Ready(()));
                     } else {
@@ -332,7 +332,7 @@ impl Future for RequestService {
 
             match msg {
                 Protocol::ServiceNotFound => bail!("service not found"),
-                Protocol::ServiceConBuild => {
+                Protocol::ServiceConnectionEstablished => {
                     return Ok(Ready(self.stream.take().unwrap().into_plain()));
                 }
                 _ => {}

@@ -239,9 +239,9 @@ impl Connection {
                         }
                         None => {
                             // should never happen, but how knows
-                            self.stream.send_and_poll(Protocol::Error(
-                                "Could not find associated public key!".to_string(),
-                            ))?;
+                            self.stream.send_and_poll(Protocol::Error{
+                                msg: "Could not find associated public key!".to_string(),
+                            })?;
                             return Ok(Ready(()));
                         }
                     };

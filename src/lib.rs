@@ -14,12 +14,14 @@ extern crate tokio_core;
 extern crate tokio_file_unix;
 #[macro_use]
 extern crate tokio_io;
+extern crate openssl;
 
 #[macro_use]
 mod error;
 mod protocol;
 mod server;
 mod peer;
+mod peer_proof;
 pub mod service;
 pub mod util;
 

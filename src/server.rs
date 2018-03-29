@@ -93,11 +93,7 @@ impl ServerBuilder {
 
     /// Set the TLS certificate chain.
     /// This will overwrite any prior call to `set_certificate_chain_file`.
-    pub fn set_cert_chain(
-        mut self,
-        chain: Vec<Vec<u8>>,
-        format: FileFormat,
-    ) -> ServerBuilder {
+    pub fn set_cert_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> ServerBuilder {
         self.config.set_cert_chain(chain, format);
         self
     }
@@ -239,7 +235,7 @@ impl Connection {
                         }
                         None => {
                             // should never happen, but how knows
-                            self.stream.send_and_poll(Protocol::Error{
+                            self.stream.send_and_poll(Protocol::Error {
                                 msg: "Could not find associated public key!".to_string(),
                             })?;
                             return Ok(Ready(()));

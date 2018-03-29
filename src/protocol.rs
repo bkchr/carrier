@@ -19,9 +19,7 @@ pub enum Protocol {
     /// If the service is available on the peer, a `ServiceConnectionEstablished` will be send and
     /// the connection will be forwarded to the service. The connection is afterwards only usable
     /// by the service.
-    RequestService {
-        name: String,
-    },
+    RequestService { name: String },
     /// The requested service could not be found on the peer.
     ServiceNotFound,
     /// The requested service is available on the peer and any further messages will be routed

@@ -6,6 +6,8 @@ use hole_punch;
 use std::io;
 use std::result;
 
+use openssl;
+
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug, Fail)]
@@ -14,6 +16,8 @@ pub enum Error {
     HolePunch(#[cause] hole_punch::Error),
     #[fail(display = "IO Error {}", _0)]
     IoError(#[cause] io::Error),
+    #[fail(display = "Openssl Error {}", _0)]
+    OpenSslError(#[cause] openssl::error::ErrorStack),
     #[fail(display = "Error {}", _0)]
     Custom(failure::Error),
 }
@@ -33,6 +37,12 @@ impl From<io::Error> for Error {
 impl From<failure::Error> for Error {
     fn from(err: failure::Error) -> Error {
         Error::Custom(err)
+    }
+}
+
+impl From<openssl::error::ErrorStack> for Error {
+    fn from(err: openssl::error::ErrorStack) -> Error {
+        Error::OpenSslError(err)
     }
 }
 

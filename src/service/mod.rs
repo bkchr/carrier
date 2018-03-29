@@ -38,6 +38,6 @@ pub trait Client {
     fn name(&self) -> &'static str;
 }
 
-pub fn register_builtin_services(builder: PeerBuilder) ->PeerBuilder{
+pub fn register_builtin_services(builder: PeerBuilder) -> PeerBuilder {
     builder.register_service(lifeline::Lifeline {})
 }

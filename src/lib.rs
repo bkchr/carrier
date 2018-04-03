@@ -26,6 +26,7 @@ pub mod service;
 pub mod util;
 
 pub use error::Error;
+pub use hole_punch::PubKey;
 pub use hole_punch::plain::Stream as Connection;
 pub use peer::Peer;
 pub use server::Server;

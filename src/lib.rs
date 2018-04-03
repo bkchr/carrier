@@ -18,14 +18,14 @@ extern crate openssl;
 
 #[macro_use]
 mod error;
-mod protocol;
-mod server;
 mod peer;
 mod peer_proof;
+mod protocol;
+mod server;
 pub mod service;
 pub mod util;
 
-pub use server::Server;
-pub use peer::Peer;
 pub use error::Error;
 pub use hole_punch::plain::Stream as Connection;
+pub use peer::Peer;
+pub use server::Server;

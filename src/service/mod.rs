@@ -6,9 +6,9 @@ be running over `Carrier`.
 `Carrier` will call `Server::spawn` whenever a remote `Peer` requests the service from the local
 `Peer`. The remote `Peer` needs to run an instance of the `Client` service implementation.
 */
+use super::Connection;
 use error::*;
 use peer::PeerBuilder;
-use super::Connection;
 
 use tokio_core::reactor::Handle;
 

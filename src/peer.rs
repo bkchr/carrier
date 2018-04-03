@@ -2,18 +2,18 @@ use error::*;
 use protocol::Protocol;
 use service::{Client, Server};
 
-use std::path::PathBuf;
-use std::rc::Rc;
 use std::cell::RefCell;
-use std::net::ToSocketAddrs;
 use std::collections::HashMap;
 use std::fmt::Display;
+use std::net::ToSocketAddrs;
+use std::path::PathBuf;
+use std::rc::Rc;
 
 use hole_punch::{plain, Config, Context, FileFormat, PubKey, Stream};
 
-use futures::{Future, Poll, Stream as FStream};
-use futures::future::Either;
 use futures::Async::Ready;
+use futures::future::Either;
+use futures::{Future, Poll, Stream as FStream};
 
 use tokio_core::reactor::{Core, Handle};
 

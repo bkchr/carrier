@@ -1,5 +1,5 @@
-use std::result;
 use std::path::PathBuf;
+use std::result;
 
 use glob;
 

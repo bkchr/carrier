@@ -1,13 +1,13 @@
-use error::*;
 use super::{Client, Server};
+use error::*;
 
 use hole_punch::plain::Stream;
 
-use tokio_core::reactor::Handle;
 use tokio_core::net::TcpStream;
+use tokio_core::reactor::Handle;
 
-use tokio_io::io;
 use tokio_io::AsyncRead;
+use tokio_io::io;
 
 use tokio_file_unix;
 

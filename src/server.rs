@@ -1,16 +1,16 @@
 use error::*;
 use protocol::Protocol;
 
-use std::collections::HashMap;
 use std::cell::RefCell;
-use std::rc::Rc;
-use std::path::PathBuf;
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::rc::Rc;
 
 use hole_punch::{Authenticator, Config, Context, FileFormat, PubKey, Stream, StreamHandle};
 
-use futures::{Future, Poll, Stream as FStream};
 use futures::Async::{NotReady, Ready};
+use futures::{Future, Poll, Stream as FStream};
 
 use tokio_core::reactor::{Core, Handle};
 

@@ -14,21 +14,21 @@ use futures::{Future, Poll, Stream as FStream};
 
 use tokio_core::reactor::{Core, Handle};
 
-struct ServerContext {
+struct BearerContext {
     devices: HashMap<PubKey, StreamHandle<Protocol>>,
 }
 
-impl ServerContext {
-    fn new() -> ServerContextPtr {
-        Rc::new(RefCell::new(ServerContext {
+impl BearerContext {
+    fn new() -> BearerContextPtr {
+        Rc::new(RefCell::new(BearerContext {
             devices: HashMap::new(),
         }))
     }
 }
 
-type ServerContextPtr = Rc<RefCell<ServerContext>>;
+type BearerContextPtr = Rc<RefCell<BearerContext>>;
 
-trait ServerContextTrait {
+trait BearerContextTrait {
     fn register_connection(&mut self, pub_key: &PubKey, con: StreamHandle<Protocol>);
 
     fn unregister_connection(&mut self, pub_key: &PubKey);
@@ -36,7 +36,7 @@ trait ServerContextTrait {
     fn get_mut_connection(&mut self, pub_key: &PubKey) -> Option<StreamHandle<Protocol>>;
 }
 
-impl ServerContextTrait for ServerContextPtr {
+impl BearerContextTrait for BearerContextPtr {
     fn register_connection(&mut self, pub_key: &PubKey, con: StreamHandle<Protocol>) {
         if self.borrow_mut()
             .devices
@@ -59,14 +59,14 @@ impl ServerContextTrait for ServerContextPtr {
     }
 }
 
-pub struct ServerBuilder {
+pub struct BearerBuilder {
     config: Config,
     handle: Handle,
 }
 
-impl ServerBuilder {
-    fn new(handle: &Handle) -> ServerBuilder {
-        ServerBuilder {
+impl BearerBuilder {
+    fn new(handle: &Handle) -> BearerBuilder {
+        BearerBuilder {
             config: Config::new(),
             handle: handle.clone(),
         }
@@ -74,39 +74,39 @@ impl ServerBuilder {
 
     /// Set the address where quic should listen on.
     /// This overwrites any prior call to `set_quic_listen_port`.
-    pub fn set_quic_listen_address(mut self, address: SocketAddr) -> ServerBuilder {
+    pub fn set_quic_listen_address(mut self, address: SocketAddr) -> BearerBuilder {
         self.config.set_quic_listen_address(address);
         self
     }
 
     /// Set the port where quic should listen on (all interfaces).
-    pub fn set_quic_listen_port(mut self, port: u16) -> ServerBuilder {
+    pub fn set_quic_listen_port(mut self, port: u16) -> BearerBuilder {
         self.config.set_quic_listen_port(port);
         self
     }
 
     /// Set the TLS certificate chain file (in PEM format).
-    pub fn set_cert_chain_file<C: Into<PathBuf>>(mut self, path: C) -> ServerBuilder {
+    pub fn set_cert_chain_file<C: Into<PathBuf>>(mut self, path: C) -> BearerBuilder {
         self.config.set_cert_chain_filename(path);
         self
     }
 
     /// Set the TLS certificate chain.
     /// This will overwrite any prior call to `set_certificate_chain_file`.
-    pub fn set_cert_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> ServerBuilder {
+    pub fn set_cert_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> BearerBuilder {
         self.config.set_cert_chain(chain, format);
         self
     }
 
     /// Set the TLS private key file (in PEM format).
-    pub fn set_private_key_file<P: Into<PathBuf>>(mut self, path: P) -> ServerBuilder {
+    pub fn set_private_key_file<P: Into<PathBuf>>(mut self, path: P) -> BearerBuilder {
         self.config.set_key_filename(path);
         self
     }
 
     /// Set the TLS private key.
     /// This will overwrite any prior call to `set_private_key_file`.
-    pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> ServerBuilder {
+    pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> BearerBuilder {
         self.config.set_key(key, format);
         self
     }
@@ -114,13 +114,13 @@ impl ServerBuilder {
     /// Set the client CA certificate files.
     /// These CAs will be used to authenticate connecting clients.
     /// When these CAs are not given, all clients will be authenticated successfully.
-    pub fn set_client_ca_cert_files(mut self, files: Vec<PathBuf>) -> ServerBuilder {
+    pub fn set_client_ca_cert_files(mut self, files: Vec<PathBuf>) -> BearerBuilder {
         self.config.set_client_ca_certificates(files);
         self
     }
 
-    /// Build the `Server` instance.
-    pub fn build(self) -> Result<Server> {
+    /// Build the `Bearer` instance.
+    pub fn build(self) -> Result<Bearer> {
         if self.config.quic_config.cert_chain.is_none()
             && self.config.quic_config.cert_chain_filename.is_none()
         {
@@ -131,19 +131,19 @@ impl ServerBuilder {
             bail!("The server requires a private key.");
         }
 
-        Server::new(self.handle, self.config)
+        Bearer::new(self.handle, self.config)
     }
 }
 
-pub struct Server {
+pub struct Bearer {
     context: Context<Protocol>,
     handle: Handle,
-    server_context: ServerContextPtr,
+    server_context: BearerContextPtr,
     authenticator: Authenticator,
 }
 
-impl Server {
-    fn new(handle: Handle, config: Config) -> Result<Server> {
+impl Bearer {
+    fn new(handle: Handle, config: Config) -> Result<Bearer> {
         let context = Context::new(handle.clone(), config)?;
 
         let authenticator = match context.authenticator() {
@@ -151,9 +151,9 @@ impl Server {
             None => bail!("No authenticator was created!"),
         };
 
-        let server_context = ServerContext::new();
+        let server_context = BearerContext::new();
 
-        Ok(Server {
+        Ok(Bearer {
             context,
             handle,
             server_context,
@@ -161,18 +161,18 @@ impl Server {
         })
     }
 
-    /// Creates a `ServerBuilder` for building a server instance.
-    pub fn builder(handle: &Handle) -> ServerBuilder {
-        ServerBuilder::new(handle)
+    /// Creates a `BearerBuilder` for building a server instance.
+    pub fn builder(handle: &Handle) -> BearerBuilder {
+        BearerBuilder::new(handle)
     }
 
-    /// Run this `Server`.
+    /// Run this `Bearer`.
     pub fn run(self, evt_loop: &mut Core) -> Result<()> {
         evt_loop.run(self)
     }
 }
 
-impl Future for Server {
+impl Future for Bearer {
     type Item = ();
     type Error = Error;
 
@@ -196,7 +196,7 @@ impl Future for Server {
 
 struct Connection {
     stream: Stream<Protocol>,
-    context: ServerContextPtr,
+    context: BearerContextPtr,
     authenticator: Authenticator,
     pub_key: Option<PubKey>,
 }
@@ -204,7 +204,7 @@ struct Connection {
 impl Connection {
     fn new(
         stream: Stream<Protocol>,
-        context: ServerContextPtr,
+        context: BearerContextPtr,
         authenticator: Authenticator,
     ) -> Connection {
         Connection {

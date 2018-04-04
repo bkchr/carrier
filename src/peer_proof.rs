@@ -28,6 +28,9 @@ where
     }
 }
 
+/// Create a proof for a Peer.
+/// The proof can be used to verify, that a given Peer is connected to a Bearer.
+/// Takes the Peer private key and the server address as input arguments.
 pub fn create_proof(pkey: &PKey<Private>, server_address: &SocketAddr) -> Result<Proof> {
     let mut signer = Signer::new(MessageDigest::sha256(), pkey)?;
 
@@ -40,6 +43,9 @@ pub fn create_proof(pkey: &PKey<Private>, server_address: &SocketAddr) -> Result
     })
 }
 
+/// Verifies a given proof.
+/// Takes the Peer public key, the server address and the that should be verified.
+/// Returns `Ok(true)`, if the proof matches.
 pub fn verify_proof(
     pkey: &PKey<Public>,
     server_address: &SocketAddr,

@@ -1,3 +1,5 @@
+use peer_proof::Proof;
+
 use hole_punch::{ConnectionId, PubKey};
 
 /// The carrier protocol that is used to communicate between the peers and the peers and
@@ -5,7 +7,7 @@ use hole_punch::{ConnectionId, PubKey};
 #[derive(Deserialize, Serialize, Clone)]
 pub enum Protocol {
     /// Hello, I'm a peer.
-    Hello,
+    Hello { proof: Proof },
     /// An error occurred.
     Error { msg: String },
     /// Connect to this peer to the given peer.

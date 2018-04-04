@@ -223,7 +223,7 @@ impl Connection {
             };
 
             match msg {
-                Protocol::Hello => {
+                Protocol::Hello { .. } => {
                     self.pub_key = self.authenticator.client_pub_key(&self.stream);
 
                     match self.pub_key {

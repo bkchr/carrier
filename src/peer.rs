@@ -1,11 +1,15 @@
 use error::*;
+use peer_proof;
 use protocol::Protocol;
 use service::{Client, Server};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt::Display;
-use std::net::ToSocketAddrs;
+use std::fs::File;
+use std::io::Read;
+use std::net::{SocketAddr, ToSocketAddrs};
+use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -16,6 +20,8 @@ use futures::future::Either;
 use futures::{Future, Poll, Stream as FStream};
 
 use tokio_core::reactor::{Core, Handle};
+
+use openssl::pkey::{PKey, Private};
 
 type PeerContextPtr = Rc<RefCell<PeerContext>>;
 
@@ -55,6 +61,7 @@ impl PeerBuilder {
     }
 
     /// Set the TLS private key filename.
+    /// The key needs to be in `PEM` format.
     pub fn set_private_key_file<K: Into<PathBuf>>(mut self, path: K) -> PeerBuilder {
         self.config.set_key_filename(path);
         self
@@ -109,6 +116,7 @@ impl PeerBuilder {
             None => bail!("Could not resolve any socket address from {}.", server),
         };
 
+        let private_key = self.load_private_key()?;
         let peer_context = self.peer_context.clone();
         let peer_context2 = self.peer_context;
         let mut context = Context::new(self.handle.clone(), self.config)?;
@@ -119,7 +127,7 @@ impl PeerBuilder {
             .map_err(|e| e.into())
             .and_then(move |s| {
                 let mut con = Connection::new(s, peer_context, handle);
-                con.send_hello()?;
+                con.send_hello(private_key, server)?;
                 Ok(con)
             })
             .map(move |c| Peer::new(handle2, context, peer_context2, c));
@@ -127,6 +135,34 @@ impl PeerBuilder {
         Ok(BuildPeer {
             future: Box::new(future),
         })
+    }
+
+    fn load_private_key(&self) -> Result<PKey<Private>> {
+        if let Some((format, ref data)) = self.config.quic_config.key {
+            self.load_private_key_from_memory(format, data)
+        } else if let Some(ref path) = self.config.quic_config.key_filename {
+            self.load_private_key_from_file(path)
+        } else {
+            bail!("No private key given!")
+        }
+    }
+
+    fn load_private_key_from_memory(
+        &self,
+        format: FileFormat,
+        data: &[u8],
+    ) -> Result<PKey<Private>> {
+        match format {
+            FileFormat::PEM => Ok(PKey::<Private>::private_key_from_pem(data)?),
+            FileFormat::DER => Ok(PKey::<Private>::private_key_from_der(data)?),
+        }
+    }
+
+    fn load_private_key_from_file(&self, path: &Path) -> Result<PKey<Private>> {
+        let mut file = File::open(path)?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+        self.load_private_key_from_memory(FileFormat::PEM, &data)
     }
 }
 
@@ -250,11 +286,13 @@ impl Connection {
         }
     }
 
-    fn send_hello(&mut self) -> Result<()> {
+    fn send_hello(&mut self, key: PKey<Private>, server_addr: SocketAddr) -> Result<()> {
+        let proof = peer_proof::create_proof(&key, &server_addr)?;
+
         self.stream
             .as_mut()
             .unwrap()
-            .send_and_poll(Protocol::Hello)
+            .send_and_poll(Protocol::Hello { proof })
             .map_err(|e| e.into())
     }
 }

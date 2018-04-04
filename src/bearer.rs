@@ -1,4 +1,5 @@
 use error::*;
+use peer_proof::Proof;
 use protocol::Protocol;
 
 use std::cell::RefCell;
@@ -29,7 +30,7 @@ impl BearerContext {
 type BearerContextPtr = Rc<RefCell<BearerContext>>;
 
 trait BearerContextTrait {
-    fn register_connection(&mut self, pub_key: &PubKey, con: StreamHandle<Protocol>);
+    fn register_connection(&mut self, pub_key: &PubKey, proof: Proof, con: StreamHandle<Protocol>);
 
     fn unregister_connection(&mut self, pub_key: &PubKey);
 
@@ -37,7 +38,8 @@ trait BearerContextTrait {
 }
 
 impl BearerContextTrait for BearerContextPtr {
-    fn register_connection(&mut self, pub_key: &PubKey, con: StreamHandle<Protocol>) {
+    fn register_connection(&mut self, pub_key: &PubKey, _: Proof, con: StreamHandle<Protocol>) {
+        // TODO: store proof in redis
         if self.borrow_mut()
             .devices
             .insert(pub_key.clone(), con)
@@ -66,8 +68,12 @@ pub struct BearerBuilder {
 
 impl BearerBuilder {
     fn new(handle: &Handle) -> BearerBuilder {
+        let mut config = Config::new();
+        // we need the public key for verifying the proof
+        config.enable_authenticator_store_orig_pub_key(true);
+
         BearerBuilder {
-            config: Config::new(),
+            config,
             handle: handle.clone(),
         }
     }
@@ -223,13 +229,16 @@ impl Connection {
             };
 
             match msg {
-                Protocol::Hello { .. } => {
+                Protocol::Hello { proof } => {
                     self.pub_key = self.authenticator.client_pub_key(&self.stream);
 
                     match self.pub_key {
                         Some(ref key) => {
-                            self.context
-                                .register_connection(key, self.stream.get_stream_handle());
+                            self.context.register_connection(
+                                key,
+                                proof,
+                                self.stream.get_stream_handle(),
+                            );
                             self.stream.upgrade_to_authenticated();
                             println!("Device registered: {}", key);
                         }

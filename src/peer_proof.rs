@@ -31,12 +31,12 @@ where
 /// Create a proof for a Peer.
 /// The proof can be used to verify, that a given Peer is connected to a Bearer.
 /// Takes the Peer private key and the server address as input arguments.
-pub fn create_proof(pkey: &PKey<Private>, server_address: &SocketAddr) -> Result<Proof> {
+pub fn create_proof(pkey: &PKey<Private>, bearer_address: &SocketAddr) -> Result<Proof> {
     let mut signer = Signer::new(MessageDigest::sha256(), pkey)?;
 
     signer.update(PROOF_SALT)?;
-    ip_address_to_bytes(&server_address.ip(), |b| Ok(signer.update(b)?))?;
-    signer.update(&u16_to_bytes(server_address.port()))?;
+    ip_address_to_bytes(&bearer_address.ip(), |b| Ok(signer.update(b)?))?;
+    signer.update(&u16_to_bytes(bearer_address.port()))?;
 
     Ok(Proof {
         data: signer.sign_to_vec()?,
@@ -48,14 +48,14 @@ pub fn create_proof(pkey: &PKey<Private>, server_address: &SocketAddr) -> Result
 /// Returns `Ok(true)`, if the proof matches.
 pub fn verify_proof(
     pkey: &PKey<Public>,
-    server_address: &SocketAddr,
+    bearer_address: &SocketAddr,
     proof: &Proof,
 ) -> Result<bool> {
     let mut verifier = Verifier::new(MessageDigest::sha256(), pkey)?;
 
     verifier.update(PROOF_SALT)?;
-    ip_address_to_bytes(&server_address.ip(), |b| Ok(verifier.update(b)?))?;
-    verifier.update(&u16_to_bytes(server_address.port()))?;
+    ip_address_to_bytes(&bearer_address.ip(), |b| Ok(verifier.update(b)?))?;
+    verifier.update(&u16_to_bytes(bearer_address.port()))?;
 
     Ok(verifier.verify(&proof.data)?)
 }

@@ -10,10 +10,11 @@ use tokio_core::reactor::Handle;
 pub struct Builder {
     config: Config,
     handle: Handle,
+    bearer_addr: SocketAddr,
 }
 
 impl Builder {
-    pub(crate) fn new(handle: &Handle) -> Builder {
+    pub(crate) fn new(handle: &Handle, bearer_addr: SocketAddr) -> Builder {
         let mut config = Config::new();
         // we need the public key for verifying the proof
         config.enable_authenticator_store_orig_pub_key(true);
@@ -21,6 +22,7 @@ impl Builder {
         Builder {
             config,
             handle: handle.clone(),
+            bearer_addr,
         }
     }
 
@@ -83,6 +85,6 @@ impl Builder {
             bail!("The server requires a private key.");
         }
 
-        Bearer::new(self.handle, self.config)
+        Bearer::new(self.handle, self.config, self.bearer_addr)
     }
 }

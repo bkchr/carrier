@@ -22,12 +22,13 @@ After building it, we can run the bearer:
        -e CARRIER_CERT_PATH=/opt/carrier/server.cert.pem \
        -e CARRIER_KEY_PATH=/opt/carrier/server.key.pem \
        -e CARRIER_CLIENT_CA_PATH=/opt/carrier/trusted_client_certs/ \
+       -e CARRIER_BEARER_ADDR=PUBLIC_IP_ADDR \
        --net host \
        carrier-bearer
 ```
 
 The bearer will listen by default on port `22222`. By defining the environment variable `CARRIER_LISTEN_PORT`,
-the bearer can be instructed to listen on another port.
+the bearer can be instructed to listen on another port. The `CARRIER_BEARER_ADDR` is the public ip address of this bearer.
 
 The bearer also requires a certificate/private key. In the example we take the certificate/private key that is
 shipped for testing purposes in this repository. YOU SHOULD NEVER USE THAT IN PRODUCTION!

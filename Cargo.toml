@@ -16,3 +16,4 @@ bytes = "0.4"
 lazy_static = "1.0"
 glob = "0.2"
 openssl = { git = "https://github.com/bkchr/rust-openssl.git", branch = "picoquic_rs" }
+redis = "0.8.0"

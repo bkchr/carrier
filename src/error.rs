@@ -8,6 +8,8 @@ use std::result;
 
 use openssl;
 
+use redis;
+
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug, Fail)]
@@ -20,6 +22,8 @@ pub enum Error {
     OpenSslError(#[cause] openssl::error::ErrorStack),
     #[fail(display = "Error {}", _0)]
     Custom(failure::Error),
+    #[fail(display = "Redis Error {}", _0)]
+    Redis(redis::RedisError),
 }
 
 impl From<hole_punch::Error> for Error {
@@ -43,6 +47,12 @@ impl From<failure::Error> for Error {
 impl From<openssl::error::ErrorStack> for Error {
     fn from(err: openssl::error::ErrorStack) -> Error {
         Error::OpenSslError(err)
+    }
+}
+
+impl From<redis::RedisError> for Error {
+    fn from(err: redis::RedisError) -> Error {
+        Error::Redis(err)
     }
 }
 

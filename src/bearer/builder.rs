@@ -1,4 +1,4 @@
-use super::Bearer;
+use super::{Bearer, ring::Ring};
 use error::*;
 
 use std::{net::SocketAddr, path::PathBuf};
@@ -11,6 +11,7 @@ pub struct Builder {
     config: Config,
     handle: Handle,
     bearer_addr: SocketAddr,
+    ring: Option<Ring>,
 }
 
 impl Builder {
@@ -23,6 +24,7 @@ impl Builder {
             config,
             handle: handle.clone(),
             bearer_addr,
+            ring: None,
         }
     }
 
@@ -73,6 +75,13 @@ impl Builder {
         self
     }
 
+    /// Let the bearer join the given Carrier Ring.
+    pub fn join_ring(mut self, redis_host: SocketAddr, password: &str) -> Result<Builder> {
+        let context = Ring::new(redis_host, password.into(), self.bearer_addr)?;
+        self.ring = Some(context);
+        Ok(self)
+    }
+
     /// Build the `Bearer` instance.
     pub fn build(self) -> Result<Bearer> {
         if self.config.quic_config.cert_chain.is_none()
@@ -85,6 +94,6 @@ impl Builder {
             bail!("The server requires a private key.");
         }
 
-        Bearer::new(self.handle, self.config, self.bearer_addr)
+        Bearer::new(self.handle, self.config, self.bearer_addr, self.ring)
     }
 }

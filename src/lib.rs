@@ -15,6 +15,7 @@ extern crate tokio_file_unix;
 #[macro_use]
 extern crate tokio_io;
 extern crate openssl;
+extern crate redis;
 
 #[macro_use]
 mod error;

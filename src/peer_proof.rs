@@ -1,7 +1,6 @@
 use error::*;
 
-use std::mem;
-use std::net::{IpAddr, SocketAddr};
+use std::{mem, net::{IpAddr, SocketAddr}, ops::Deref};
 
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private, Public};
@@ -12,6 +11,14 @@ const PROOF_SALT: &[u8] = b"CARRIER";
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Proof {
     data: Vec<u8>,
+}
+
+impl Deref for Proof {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 fn u16_to_bytes(data: u16) -> [u8; 2] {

@@ -14,6 +14,7 @@ use tokio_core::reactor::{Core, Handle};
 mod builder;
 mod connection;
 mod context;
+mod ring;
 
 /// A `Bearer` is on the Carrier Ring and holds connections to peers.
 pub struct Bearer {
@@ -28,7 +29,12 @@ pub struct Bearer {
 }
 
 impl Bearer {
-    fn new(handle: Handle, config: Config, bearer_addr: SocketAddr) -> Result<Bearer> {
+    fn new(
+        handle: Handle,
+        config: Config,
+        bearer_addr: SocketAddr,
+        ring: Option<ring::Ring>,
+    ) -> Result<Bearer> {
         let hp_context = Context::new(handle.clone(), config)?;
 
         let authenticator = match hp_context.authenticator() {
@@ -36,7 +42,7 @@ impl Bearer {
             None => bail!("No authenticator was created!"),
         };
 
-        let context = context::Context::new();
+        let context = context::Context::new(ring);
 
         Ok(Bearer {
             hp_context,

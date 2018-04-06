@@ -55,7 +55,12 @@ pub type ContextPtr = Rc<RefCell<Context>>;
 
 pub trait ContextTrait {
     /// Register a connection at the context.
-    fn register_connection(&mut self, pub_key: &PubKeyHash, proof: Proof, con: StreamHandle<Protocol>);
+    fn register_connection(
+        &mut self,
+        pub_key: &PubKeyHash,
+        proof: Proof,
+        con: StreamHandle<Protocol>,
+    );
 
     /// Unregister a connection, if the connection was closed.
     fn unregister_connection(&mut self, pub_key: &PubKeyHash);
@@ -67,7 +72,12 @@ pub trait ContextTrait {
 }
 
 impl ContextTrait for ContextPtr {
-    fn register_connection(&mut self, pub_key: &PubKeyHash, proof: Proof, con: StreamHandle<Protocol>) {
+    fn register_connection(
+        &mut self,
+        pub_key: &PubKeyHash,
+        proof: Proof,
+        con: StreamHandle<Protocol>,
+    ) {
         self.borrow_mut()
             .register_connection_impl(pub_key, proof, con);
     }

@@ -18,7 +18,7 @@ fn main() {
     let peer_key = hole_punch::PubKeyHash::from_hashed_hex(&peer_key)
         .expect("Creates public key from hashed hex.");
 
-    let server_addr = args()
+    let bearer_addr = args()
         .nth(2)
         .expect("Please give carrier server address as second argument.");
 
@@ -45,7 +45,7 @@ fn main() {
         .set_private_key_file(key)
         .set_client_ca_cert_files(client_ca_vec)
         .set_server_ca_cert_files(server_ca_vec)
-        .build(&server_addr)
+        .build(&bearer_addr)
         .unwrap();
 
     let peer = evt_loop.run(builder).unwrap();

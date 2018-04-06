@@ -21,7 +21,7 @@ After building it, we can run the bearer:
        -v $(pwd)/test_certs/:/opt/carrier \
        -e CARRIER_CERT_PATH=/opt/carrier/server.cert.pem \
        -e CARRIER_KEY_PATH=/opt/carrier/server.key.pem \
-       -e CARRIER_CLIENT_CA_PATH=/opt/carrier/trusted_client_certs/ \
+       -e CARRIER_CLIENT_CA_PATH=/opt/carrier/trusted_client_cas/ \
        -e CARRIER_BEARER_ADDR=PUBLIC_IP_ADDR \
        --net host \
        carrier-bearer
@@ -40,8 +40,8 @@ store. The certificate authorities in the store need to be encoded as `PEM` and 
 
 Execute the following command:
 ```CARRIER_CERT_PATH=./test_certs/peer.cert.pem CARRIER_KEY_PATH=./test_certs/peer.key.pem \
-   CARRIER_SERVER_CA_PATH=./test_certs/trusted_server_certs \
-   CARRIER_CLIENT_CA_PATH=./test_certs/trusted_client_certs \
+   CARRIER_SERVER_CA_PATH=./test_certs/trusted_server_cas \
+   CARRIER_CLIENT_CA_PATH=./test_certs/trusted_client_cas \
    CARRIER_SERVER_ADDR=SERVER_ADDR:SERVER_PORT cargo run --release --bin carrier-peer
 ```
 

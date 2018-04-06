@@ -3,7 +3,7 @@ use peer_proof::{verify_proof_der, Proof};
 
 use std::net::SocketAddr;
 
-use hole_punch::PubKey;
+use hole_punch::PubKeyHash;
 
 use redis;
 
@@ -13,7 +13,7 @@ pub struct Ring {
     bearer_addr: SocketAddr,
 }
 
-fn get_field_names(pub_key: &PubKey) -> (String, String, String) {
+fn get_field_names(pub_key: &PubKeyHash) -> (String, String, String) {
     let pub_key_str = format!("{}", pub_key);
 
     (
@@ -41,9 +41,9 @@ impl Ring {
     }
 
     /// Broadcast that the `Bearer` has a new connection.
-    pub fn broadcast_new_connection(&mut self, pub_key: &PubKey, proof: Proof) {
+    pub fn broadcast_new_connection(&mut self, pub_key: &PubKeyHash, proof: Proof) {
         let orig_pub_key = pub_key
-            .orig_public_key_der()
+            .public_key_der()
             .expect("We do not accept connections without full public keys");
 
         let (proof_field, pubkey_field, bearer_field) = get_field_names(pub_key);
@@ -66,7 +66,7 @@ impl Ring {
 
     /// Try to find a connection in the Carrier Ring.
     /// Returns the address of the `Bearer` that holds the connection.
-    pub fn find_connection(&self, pub_key: &PubKey) -> Option<SocketAddr> {
+    pub fn find_connection(&self, pub_key: &PubKeyHash) -> Option<SocketAddr> {
         let (proof_field, pubkey_field, bearer_field) = get_field_names(pub_key);
 
         let (proof, orig_pub_key, bearer_addr): (Vec<u8>, Vec<u8>, String) = match redis::pipe()

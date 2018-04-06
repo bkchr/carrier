@@ -15,7 +15,7 @@ fn main() {
         "Please give the public key(sha256 hash as hex) of the peer you want to connect to.",
     );
 
-    let peer_key = hole_punch::PubKey::from_hashed_hex(&peer_key)
+    let peer_key = hole_punch::PubKeyHash::from_hashed_hex(&peer_key)
         .expect("Creates public key from hashed hex.");
 
     let server_addr = args()

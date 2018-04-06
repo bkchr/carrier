@@ -1,6 +1,6 @@
 use peer_proof::Proof;
 
-use hole_punch::{ConnectionId, PubKey};
+use hole_punch::{ConnectionId, PubKeyHash};
 
 /// The carrier protocol that is used to communicate between the peers and the peers and
 /// the bearers.
@@ -12,7 +12,7 @@ pub enum Protocol {
     Error { msg: String },
     /// Connect to this peer to the given peer.
     ConnectToPeer {
-        pub_key: PubKey,
+        pub_key: PubKeyHash,
         connection_id: ConnectionId,
     },
     /// The requested peer could not be found.

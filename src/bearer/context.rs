@@ -2,12 +2,12 @@ use super::ring::Ring;
 use peer_proof::Proof;
 use protocol::Protocol;
 
-use hole_punch::{PubKey, StreamHandle};
+use hole_punch::{PubKeyHash, StreamHandle};
 
 use std::{cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc};
 
 pub struct Context {
-    devices: HashMap<PubKey, StreamHandle<Protocol>>,
+    devices: HashMap<PubKeyHash, StreamHandle<Protocol>>,
     ring: Option<Ring>,
 }
 
@@ -21,7 +21,7 @@ impl Context {
 
     fn register_connection_impl(
         &mut self,
-        pub_key: &PubKey,
+        pub_key: &PubKeyHash,
         proof: Proof,
         con: StreamHandle<Protocol>,
     ) {
@@ -32,7 +32,7 @@ impl Context {
         }
     }
 
-    fn find_connection_impl(&self, pub_key: &PubKey) -> FindResult {
+    fn find_connection_impl(&self, pub_key: &PubKeyHash) -> FindResult {
         if let Some(handle) = self.devices.get(pub_key) {
             return FindResult::Local(handle.clone());
         } else if let Some(ref ring) = self.ring {
@@ -55,28 +55,28 @@ pub type ContextPtr = Rc<RefCell<Context>>;
 
 pub trait ContextTrait {
     /// Register a connection at the context.
-    fn register_connection(&mut self, pub_key: &PubKey, proof: Proof, con: StreamHandle<Protocol>);
+    fn register_connection(&mut self, pub_key: &PubKeyHash, proof: Proof, con: StreamHandle<Protocol>);
 
     /// Unregister a connection, if the connection was closed.
-    fn unregister_connection(&mut self, pub_key: &PubKey);
+    fn unregister_connection(&mut self, pub_key: &PubKeyHash);
 
     /// Find a connection.
     /// If the `Bearer` is connected to the Carrier Ring, the location of the connection can be
     /// remote.
-    fn find_connection(&self, pub_key: &PubKey) -> FindResult;
+    fn find_connection(&self, pub_key: &PubKeyHash) -> FindResult;
 }
 
 impl ContextTrait for ContextPtr {
-    fn register_connection(&mut self, pub_key: &PubKey, proof: Proof, con: StreamHandle<Protocol>) {
+    fn register_connection(&mut self, pub_key: &PubKeyHash, proof: Proof, con: StreamHandle<Protocol>) {
         self.borrow_mut()
             .register_connection_impl(pub_key, proof, con);
     }
 
-    fn unregister_connection(&mut self, pub_key: &PubKey) {
+    fn unregister_connection(&mut self, pub_key: &PubKeyHash) {
         self.borrow_mut().devices.remove(pub_key);
     }
 
-    fn find_connection(&self, pub_key: &PubKey) -> FindResult {
+    fn find_connection(&self, pub_key: &PubKeyHash) -> FindResult {
         self.borrow().find_connection_impl(pub_key)
     }
 }

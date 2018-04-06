@@ -13,7 +13,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use hole_punch::{plain, Config, Context, FileFormat, PubKey, Stream};
+use hole_punch::{plain, Config, Context, FileFormat, PubKeyHash, Stream};
 
 use futures::Async::Ready;
 use futures::future::Either;
@@ -216,7 +216,7 @@ impl Peer {
         mut self,
         evt_loop: &mut Core,
         service: S,
-        peer: PubKey,
+        peer: PubKeyHash,
     ) -> Result<S::Item>
     where
         Error: From<S::Error>,

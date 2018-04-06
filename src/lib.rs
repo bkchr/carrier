@@ -28,6 +28,6 @@ pub mod util;
 
 pub use bearer::Bearer;
 pub use error::Error;
-pub use hole_punch::PubKey;
+pub use hole_punch::PubKeyHash;
 pub use hole_punch::plain::Stream as Connection;
 pub use peer::Peer;

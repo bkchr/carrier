@@ -1,6 +1,6 @@
 use bearer::context::{ContextPtr, ContextTrait, FindResult};
 use error::*;
-use hole_punch::{Authenticator, PubKey, Stream};
+use hole_punch::{Authenticator, PubKeyHash, Stream};
 use peer_proof::{self, Proof};
 use protocol::Protocol;
 
@@ -15,11 +15,11 @@ use openssl::pkey::{PKey, Public};
 pub struct Connection {
     stream: Stream<Protocol>,
     context: ContextPtr,
-    pub_key: PubKey,
+    pub_key: PubKeyHash,
 }
 
 impl Connection {
-    fn new(stream: Stream<Protocol>, context: ContextPtr, pub_key: PubKey) -> Connection {
+    fn new(stream: Stream<Protocol>, context: ContextPtr, pub_key: PubKeyHash) -> Connection {
         Connection {
             stream,
             context,
@@ -109,7 +109,7 @@ impl Initialize {
 
     /// Extract the public key from the `Authenticator` and checks that the original public key
     /// is also available.
-    fn extract_pubkey(&mut self) -> Result<(PubKey, PKey<Public>)> {
+    fn extract_pubkey(&mut self) -> Result<(PubKeyHash, PKey<Public>)> {
         let pub_key = self.authenticator
             .client_pub_key(self.stream.as_ref().unwrap());
 
@@ -118,9 +118,9 @@ impl Initialize {
             None => bail!("Could not find the public key for a connection"),
         };
 
-        let orig_key = match pub_key.orig_public_key()? {
+        let orig_key = match pub_key.public_key()? {
             Some(key) => key,
-            None => bail!("`PubKey` does not contain the original public key"),
+            None => bail!("`PubKeyHash` does not contain the original public key"),
         };
 
         Ok((pub_key, orig_key))

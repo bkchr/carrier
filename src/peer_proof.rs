@@ -21,6 +21,12 @@ impl Deref for Proof {
     }
 }
 
+impl From<Vec<u8>> for Proof {
+    fn from(data: Vec<u8>) -> Proof {
+        Proof { data }
+    }
+}
+
 fn u16_to_bytes(data: u16) -> [u8; 2] {
     unsafe { mem::transmute(data) }
 }
@@ -65,4 +71,12 @@ pub fn verify_proof(
     verifier.update(&u16_to_bytes(bearer_address.port()))?;
 
     Ok(verifier.verify(&proof.data)?)
+}
+
+/// Verifies a given proof.
+/// This function is essentially doing the same as `verify_proof`, it just takes the public key
+/// in `DER` format.
+pub fn verify_proof_der(pkey: &[u8], bearer_address: &SocketAddr, proof: &Proof) -> Result<bool> {
+    let pkey = PKey::<Public>::public_key_from_der(pkey)?;
+    verify_proof(&pkey, bearer_address, proof)
 }

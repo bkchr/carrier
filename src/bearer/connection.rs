@@ -1,4 +1,4 @@
-use bearer::context::{ContextPtr, ContextTrait};
+use bearer::context::{ContextPtr, ContextTrait, FindResult};
 use error::*;
 use hole_punch::{Authenticator, PubKey, Stream};
 use peer_proof::{self, Proof};
@@ -38,15 +38,14 @@ impl Connection {
                 Protocol::ConnectToPeer {
                     pub_key,
                     connection_id,
-                } => {
-                    if let Some(mut con) = self.context.get_mut_connection(&pub_key) {
+                } => match self.context.find_connection(&pub_key) {
+                    FindResult::Local(mut handle) => {
                         self.stream
-                            .create_connection_to(connection_id, &mut con)
-                            .unwrap();
-                    } else {
-                        self.stream.send_and_poll(Protocol::PeerNotFound)?;
+                            .create_connection_to(connection_id, &mut handle)?;
                     }
-                }
+                    FindResult::Remote(_) => unimplemented!(),
+                    FindResult::NotFound => self.stream.send_and_poll(Protocol::PeerNotFound)?,
+                },
                 _ => {}
             }
         }

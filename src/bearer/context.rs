@@ -4,9 +4,7 @@ use protocol::Protocol;
 
 use hole_punch::{PubKey, StreamHandle};
 
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
+use std::{cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc};
 
 pub struct Context {
     devices: HashMap<PubKey, StreamHandle<Protocol>>,
@@ -33,16 +31,39 @@ impl Context {
             ring.broadcast_new_connection(pub_key, proof);
         }
     }
+
+    fn find_connection_impl(&self, pub_key: &PubKey) -> FindResult {
+        if let Some(handle) = self.devices.get(pub_key) {
+            return FindResult::Local(handle.clone());
+        } else if let Some(ref ring) = self.ring {
+            if let Some(addr) = ring.find_connection(pub_key) {
+                return FindResult::Remote(addr);
+            }
+        }
+
+        FindResult::NotFound
+    }
+}
+
+pub enum FindResult {
+    Local(StreamHandle<Protocol>),
+    Remote(SocketAddr),
+    NotFound,
 }
 
 pub type ContextPtr = Rc<RefCell<Context>>;
 
 pub trait ContextTrait {
+    /// Register a connection at the context.
     fn register_connection(&mut self, pub_key: &PubKey, proof: Proof, con: StreamHandle<Protocol>);
 
+    /// Unregister a connection, if the connection was closed.
     fn unregister_connection(&mut self, pub_key: &PubKey);
 
-    fn get_mut_connection(&mut self, pub_key: &PubKey) -> Option<StreamHandle<Protocol>>;
+    /// Find a connection.
+    /// If the `Bearer` is connected to the Carrier Ring, the location of the connection can be
+    /// remote.
+    fn find_connection(&self, pub_key: &PubKey) -> FindResult;
 }
 
 impl ContextTrait for ContextPtr {
@@ -55,10 +76,7 @@ impl ContextTrait for ContextPtr {
         self.borrow_mut().devices.remove(pub_key);
     }
 
-    fn get_mut_connection(&mut self, pub_key: &PubKey) -> Option<StreamHandle<Protocol>> {
-        self.borrow_mut()
-            .devices
-            .get_mut(pub_key)
-            .map(|v| v.clone())
+    fn find_connection(&self, pub_key: &PubKey) -> FindResult {
+        self.borrow().find_connection_impl(pub_key)
     }
 }

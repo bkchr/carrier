@@ -115,9 +115,6 @@ impl Server for TestService {
     fn spawn(&mut self, handle: &Handle, mut con: Connection) -> Result<()> {
         con.start_send(TEST_SERVICE_DATA.into())?;
         con.poll_complete()?;
-
-        //TODO: Ensure that picoquic delivers message before closing connections
-        handle.spawn(con.for_each(|_| Ok(())).map_err(|_| ()));
         Ok(())
     }
 

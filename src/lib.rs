@@ -15,12 +15,10 @@ extern crate tokio_file_unix;
 #[macro_use]
 extern crate tokio_io;
 extern crate openssl;
-extern crate redis;
 extern crate tokio_serde_json;
 
 #[macro_use]
 mod error;
-mod bearer;
 mod context;
 mod peer;
 mod peer_proof;
@@ -29,7 +27,6 @@ pub mod service;
 mod stream;
 pub mod util;
 
-pub use bearer::Bearer;
 pub use error::Error;
 pub use hole_punch::{FileFormat, PubKeyHash};
 pub use peer::Peer;

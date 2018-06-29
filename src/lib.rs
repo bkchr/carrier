@@ -21,7 +21,6 @@ extern crate tokio_serde_json;
 mod error;
 mod context;
 mod peer;
-mod peer_proof;
 mod protocol;
 pub mod service;
 mod stream;

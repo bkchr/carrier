@@ -2,7 +2,7 @@ use super::ring::Ring;
 use peer_proof::Proof;
 use protocol::Protocol;
 
-use hole_punch::{PubKeyHash, StreamHandle};
+use hole_punch::PubKeyHash;
 
 use std::{cell::RefCell, collections::HashMap, net::SocketAddr, rc::Rc};
 

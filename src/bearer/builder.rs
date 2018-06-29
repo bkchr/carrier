@@ -1,4 +1,4 @@
-use super::{Bearer, ring::Ring};
+use super::{ring::Ring, Bearer};
 use error::*;
 
 use std::{net::SocketAddr, path::PathBuf};

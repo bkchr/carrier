@@ -1,12 +1,15 @@
 use bearer::context::{ContextPtr, ContextTrait, FindResult};
 use error::*;
-use hole_punch::{Authenticator, PubKeyHash, Stream};
+use hole_punch::{PubKeyHash, Stream};
 use peer_proof::{self, Proof};
 use protocol::Protocol;
 
 use std::net::SocketAddr;
 
-use futures::{Async::{NotReady, Ready}, Future, Poll, Stream as FStream};
+use futures::{
+    Async::{NotReady, Ready},
+    Future, Poll, Stream as FStream,
+};
 
 use tokio_core::reactor::Handle;
 
@@ -76,7 +79,6 @@ impl Future for Connection {
 pub struct Initialize {
     stream: Option<Stream<Protocol>>,
     context: ContextPtr,
-    authenticator: Authenticator,
     bearer_address: SocketAddr,
     handle: Handle,
 }
@@ -110,7 +112,8 @@ impl Initialize {
     /// Extract the public key from the `Authenticator` and checks that the original public key
     /// is also available.
     fn extract_pubkey(&mut self) -> Result<(PubKeyHash, PKey<Public>)> {
-        let pub_key = self.authenticator
+        let pub_key = self
+            .authenticator
             .client_pub_key(self.stream.as_ref().unwrap());
 
         let pub_key = match pub_key {

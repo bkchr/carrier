@@ -1,6 +1,10 @@
 use error::*;
 
-use std::{mem, net::{IpAddr, SocketAddr}, ops::Deref};
+use std::{
+    mem,
+    net::{IpAddr, SocketAddr},
+    ops::Deref,
+};
 
 use openssl::hash::MessageDigest;
 use openssl::pkey::{PKey, Private, Public};

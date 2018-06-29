@@ -5,7 +5,7 @@ use protocol::Protocol;
 
 use std::net::SocketAddr;
 
-use hole_punch::{Authenticator, Config, Context};
+use hole_punch::{Config, Context};
 
 use futures::{Async::Ready, Future, Poll, Stream as FStream};
 

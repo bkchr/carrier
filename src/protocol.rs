@@ -1,31 +1,21 @@
-use peer_proof::Proof;
+use service::ServiceId;
 
-use hole_punch::{ConnectionId, PubKeyHash};
-
-/// The carrier protocol that is used to communicate between the peers and the peers and
-/// the bearers.
+/// The carrier protocol that is used to communicate between the peers.
 #[derive(Deserialize, Serialize, Clone)]
 pub enum Protocol {
-    /// Hello, I'm a peer.
-    Hello { proof: Proof },
-    /// An error occurred.
-    Error { msg: String },
-    /// Connect to this peer to the given peer.
-    ConnectToPeer {
-        pub_key: PubKeyHash,
-        connection_id: ConnectionId,
-    },
-    /// The requested peer could not be found.
-    PeerNotFound,
-    /// Request a connection to the given service.
-    /// If the service is available on the peer, a `ServiceConnectionEstablished` will be send and
-    /// the connection will be forwarded to the service. The connection is afterwards only usable
-    /// by the service.
-    RequestService { name: String },
+    /// Request to start a the given service on the peer.
+    /// If the service is available on the peer, a `ServiceStarted` will be send. The stream is
+    /// afterwards only usable by the service. If the service is not available, a `ServiceNotFound`
+    /// will be send.
+    RequestServiceStart { name: String },
     /// The requested service could not be found on the peer.
     ServiceNotFound,
-    /// The requested service is available on the peer and any further messages will be routed
-    /// to this service. The peer that receives this message, should start the service client
-    /// with the current connection.
-    ServiceConnectionEstablished,
+    /// The requested Service was started on the peer with the given id.
+    ServiceStarted { id: ServiceId },
+    /// Connect a stream to the given service instance. Will response with `ServiceNotFound`, when
+    /// a service with the given id is not available or with `ServiceConnected` when the given
+    /// service instance could be found.
+    ConnectToService { id: ServiceId },
+    /// The stream could be connected to the given service.
+    ServiceConnected,
 }

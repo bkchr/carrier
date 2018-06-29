@@ -1,6 +1,15 @@
-use carrier::{self, Connection, Error, FileFormat, PubKeyHash, service::{Client, Server}};
+use carrier::{
+    self,
+    service::{Client, Server},
+    Connection, Error, FileFormat, PubKeyHash,
+};
 
-use std::{result, thread, net::{IpAddr, SocketAddr}, sync::mpsc::channel};
+use std::{
+    net::{IpAddr, SocketAddr},
+    result,
+    sync::mpsc::channel,
+    thread,
+};
 
 use tokio_core::reactor::{Core, Handle};
 
@@ -103,7 +112,8 @@ pub fn run_client() {
 
     let peer = evt_loop.run(builder).unwrap();
 
-    let data = peer.run_service(&mut evt_loop, TestService {}, peer_key)
+    let data = peer
+        .run_service(&mut evt_loop, TestService {}, peer_key)
         .expect("TestService returns data.");
 
     assert_eq!(TEST_SERVICE_DATA.to_vec(), data);

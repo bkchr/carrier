@@ -33,4 +33,4 @@ pub use bearer::Bearer;
 pub use error::Error;
 pub use hole_punch::{FileFormat, PubKeyHash};
 pub use peer::Peer;
-pub use stream::Stream;
+pub use stream::{NewStreamHandle, Stream};

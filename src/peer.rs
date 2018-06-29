@@ -6,15 +6,15 @@ use stream::ProtocolStream;
 
 use std::fs::File;
 use std::io::Read;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::path::PathBuf;
 
 use hole_punch::{
-    Config, ConfigBuilder, Context, CreateConnectionToPeerHandle, FileFormat, PubKeyHash, self,
+    self, Config, ConfigBuilder, Context, CreateConnectionToPeerHandle, FileFormat, PubKeyHash,
 };
 
-use futures::{Async::Ready, Future, Poll, Stream as FStream, sync::oneshot};
+use futures::{sync::oneshot, Async::Ready, Future, Poll, Stream as FStream};
 
 use tokio_core::reactor::{Core, Handle};
 
@@ -149,8 +149,30 @@ impl PeerBuilder {
     }
 }
 
-fn spawn_hole_punch_context(context: Context, handle: &Handle) -> oneshot::Receiver<Result<()>> {
-    
+fn spawn_hole_punch_context(
+    context: Context,
+    peer_context: PeerContext,
+    handle: &Handle,
+) -> oneshot::Receiver<Result<()>> {
+    let (sender, recv) = oneshot::channel();
+
+    let inner_handle = handle.clone();
+    handle.spawn(
+        context
+            .for_each(|stream| {
+                inner_handle.spawn(
+                    IncomingStream::new(stream, peer_context.clone())
+                        .map_err(|e| println!("IncomingStream error: {:?}", e)),
+                );
+                Ok(())
+            })
+            .then(|r| {
+                let _ = sender.send(r);
+                Ok(())
+            }),
+    );
+
+    recv
 }
 
 pub struct Peer {
@@ -164,10 +186,13 @@ impl Peer {
     fn new(handle: Handle, context: Context, peer_context: PeerContext) -> Peer {
         let create_connection_to_peer_handle = context.create_connection_to_peer_handle();
 
+        let context_result = spawn_hole_punch_context(context, peer_context.clone(), &handle);
+
         Peer {
             handle,
             context,
             peer_context,
+            context_result,
         }
     }
 
@@ -187,28 +212,25 @@ impl Peer {
         service: S,
         peer: &PubKeyHash,
         handle: Handle,
-    ) -> Result<impl Future<Item=S::Item, Error=S::Error>>
+    ) -> Result<impl Future<Item = S::Item, Error = S::Error>>
     where
         Error: From<S::Error>,
     {
-        let peer = self.context.create_connection_to_peer(peer);
-
-
-        let con = match evt_loop.run(con.select2(&mut self)).map_err(|e| match e {
-            Either::A((e, _)) => e.into(),
-            Either::B((e, _)) => e,
-        })? {
-            Either::A((con, _)) => con,
-            Either::B(_) => {
-                bail!("connection to server closed while waiting for connection to peer")
-            }
-        };
-
-        let con = evt_loop.run(RequestService::start(con, service.name())?)?;
-
-        evt_loop
-            .run(service.start(&self.handle, con)?)
-            .map_err(|e| e.into())
+        let name = service.name();
+        self.context
+            .create_connection_to_peer(peer)
+            .and_then(|stream| {
+                let stream: ProtocolStream = stream.into();
+                stream
+                    .send(Protocol::RequestServiceStart { name: name.into() })
+                    .and_then(|s| s.into_future())
+            })
+            .and_then(|(msg, stream)| match msg {
+                None => bail!("Stream closed while requesting service!"),
+                Some(Protocol::ServiceStarted { id }) => {}
+                Some(Protocol::ServiceNotFound) => bail!("Requested service({}) not found!", name),
+                _ => bail!("Received not expected message!"),
+            })
     }
 }
 
@@ -217,17 +239,7 @@ impl Future for Peer {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        loop {
-            match try_ready!(self.context.poll()) {
-                Some(stream) => {
-                    self.handle.spawn(
-                        IncomingStream::new(stream, self.peer_context.clone())
-                            .map_err(|e| println!("IncomingStream error: {:?}", e)),
-                    );
-                }
-                None => return Ok(Ready(())),
-            };
-        }
+        self.context_result.poll()
     }
 }
 

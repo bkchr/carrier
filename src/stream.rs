@@ -1,9 +1,10 @@
 use error::*;
 use protocol::Protocol;
+use service::ServiceId;
 
 use hole_punch;
 
-use futures::{Poll, Sink, StartSend, Stream as FStream};
+use futures::{Future, Poll, Sink, StartSend, Stream as FStream};
 
 use tokio_io::{codec::length_delimited, AsyncRead, AsyncWrite};
 
@@ -15,7 +16,11 @@ pub struct Stream {
     stream: hole_punch::Stream,
 }
 
-impl Stream {}
+impl Stream {
+    fn get_ref(&self) -> &hole_punch::Stream {
+        &self.stream
+    }
+}
 
 impl Into<Stream> for hole_punch::Stream {
     fn into(stream: hole_punch::Stream) -> Stream {
@@ -80,5 +85,38 @@ impl Into<ProtocolStream> for hole_punch::Stream {
 impl Into<Stream> for ProtocolStream {
     fn into(stream: ProtocolStream) -> Stream {
         stream.into_inner().into_inner().into_inner()
+    }
+}
+
+#[derive(Clone)]
+pub struct NewStreamHandle {
+    new_stream_handle: hole_punch::NewStreamHandle,
+    service_id: ServiceId,
+}
+
+impl NewStreamHandle {
+    pub(crate) fn new(service_id: ServiceId, stream: &Stream) -> NewStreamHandle {
+        let new_stream_handle = stream.get_ref().new_stream_handle().clone();
+
+        NewStreamHandle {
+            new_stream_handle,
+            service_id,
+        }
+    }
+
+    pub fn new_stream(&self) -> impl Future<Item = Stream, Error = Error> {
+        self.new_stream_handle.new_stream().and_then(|stream| {
+            stream
+                .send(Protocol::ConnectToService {
+                    id: self.service_id,
+                })
+                .and_then(|s| s.into_future())
+                        })
+            .and_then(|(msg, stream)| match msg {
+                None => bail!("Stream closed!"),
+                Some(Protocol::ServiceConnected) => stream.into(),
+                Some(Protocol::ServiceNotFound) => bail!("Could not find requested service!"),
+                _ => bail!("Received unexpected message!"),
+            })
     }
 }

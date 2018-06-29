@@ -8,7 +8,7 @@ be running over `Carrier`.
 */
 use error::*;
 use peer::PeerBuilder;
-use Stream;
+use {NewStreamHandle, Stream};
 
 use tokio_core::reactor::Handle;
 
@@ -16,8 +16,8 @@ use futures::Future;
 
 use std::result;
 
-pub mod lifeline;
 pub(crate) mod executor;
+pub mod lifeline;
 
 pub type ServiceId = u64;
 
@@ -38,6 +38,7 @@ pub trait Server {
         &mut self,
         handle: &Handle,
         stream: Stream,
+        new_stream_handle: NewStreamHandle,
     ) -> Result<Box<ServerResult<Item = (), Error = Error>>>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
@@ -50,7 +51,12 @@ pub trait Client {
     type Future: Future<Item = Self::Item, Error = Self::Error> + ServiceInstance;
     /// Starts a new client instance.
     /// The returned `Future` should resolve, when the service is finished.
-    fn start(self, handle: &Handle, stream: Stream) -> result::Result<Self::Future, Self::Error>;
+    fn start(
+        self,
+        handle: &Handle,
+        stream: Stream,
+        new_stream_handle: NewStreamHandle,
+    ) -> result::Result<Self::Future, Self::Error>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }

@@ -23,6 +23,9 @@ impl Inner {
     }
 }
 
+/// The context of the peer.
+/// It stores all registered services. Besides the services, the context is responsible for
+/// executing instances of a service.
 #[derive(Clone)]
 pub struct PeerContext {
     inner: Rc<RefCell<Inner>>,
@@ -31,10 +34,11 @@ pub struct PeerContext {
 
 impl PeerContext {
     fn new(handle: Handle) -> PeerContext {
-        let (instance_msg_sender, recv) = unbounded();
+        let instances_executor = executor::InstancesExecutor::new(handle);
+
         PeerContext {
             inner: Rc::new(RefCell::new(Inner::new())),
-            instance_msg_sender,
+            instances_executor,
         }
     }
 
@@ -47,9 +51,7 @@ impl PeerContext {
         inst_id: ServiceId,
         inst: Box<ServerResult<Item = (), Error = Error>>,
     ) {
-        let _ = self
-            .instance_msg_sender
-            .unbounded_send(ServiceInstancesExecutorMessage::NewInstance(inst_id, inst));
+        self.instances_executor.add_server_service_instance(inst_id, inst);
     }
 
     pub fn connect_stream_to_server_service_instance(
@@ -57,9 +59,7 @@ impl PeerContext {
         inst_id: ServiceId,
         stream: ProtocolStream,
     ) {
-        let _ = self
-            .instance_msg_sender
-            .unbounded_send(ServiceInstancesExecutorMessage::NewStream(inst_id, stream));
+        self.instances_executor.connect_stream_to_server_service_instance(inst_id, stream);
     }
 }
 

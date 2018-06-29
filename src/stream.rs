@@ -23,8 +23,8 @@ impl Stream {
 }
 
 impl Into<Stream> for hole_punch::Stream {
-    fn into(stream: hole_punch::Stream) -> Stream {
-        Stream { stream }
+    fn into(self) -> Stream {
+        Stream { stream: self }
     }
 }
 
@@ -32,7 +32,7 @@ impl FStream for Stream {
     type Item = <hole_punch::Stream as FStream>::Item;
     type Error = Error;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         self.stream.poll().map_err(|e| e.into())
     }
 }
@@ -76,16 +76,14 @@ impl AsyncWrite for Stream {
 
 pub type ProtocolStream = WriteJson<ReadJson<length_delimited::Framed<Stream>, Protocol>, Protocol>;
 
-impl Into<ProtocolStream> for hole_punch::Stream {
-    fn into(stream: hole_punch::Stream) -> ProtocolStream {
-        WriteJson::new(ReadJson::new(length_delimited::Framed::new(stream.into())))
+impl Into<Stream> for ProtocolStream {
+    fn into(self) -> Stream {
+        self.into_inner().into_inner().into_inner()
     }
 }
 
-impl Into<Stream> for ProtocolStream {
-    fn into(stream: ProtocolStream) -> Stream {
-        stream.into_inner().into_inner().into_inner()
-    }
+pub fn protocol_stream_create(stream: hole_punch::Stream) -> ProtocolStream {
+    WriteJson::new(ReadJson::new(length_delimited::Framed::new(stream.into())))
 }
 
 #[derive(Clone)]
@@ -105,13 +103,15 @@ impl NewStreamHandle {
     }
 
     pub fn new_stream(&self) -> impl Future<Item = Stream, Error = Error> {
-        self.new_stream_handle.new_stream().and_then(|stream| {
-            stream
-                .send(Protocol::ConnectToService {
-                    id: self.service_id,
-                })
-                .and_then(|s| s.into_future())
-                        })
+        self.new_stream_handle
+            .new_stream()
+            .and_then(|stream| {
+                stream
+                    .send(Protocol::ConnectToService {
+                        id: self.service_id,
+                    })
+                    .and_then(|s| s.into_future())
+            })
             .and_then(|(msg, stream)| match msg {
                 None => bail!("Stream closed!"),
                 Some(Protocol::ServiceConnected) => stream.into(),

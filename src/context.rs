@@ -1,5 +1,5 @@
 use error::*;
-use service::{Server, ServerResult, ServiceId, executor};
+use service::{Server, ServiceInstance, ServiceId, executor};
 use stream::ProtocolStream;
 
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
@@ -18,8 +18,7 @@ impl Inner {
     }
 
     fn register_service<S: Server + 'static>(&mut self, service: S) {
-        let name = service.name();
-        self.services.insert(name, Box::new(service));
+        self.services.insert(service.name().into(), Box::new(service));
     }
 }
 
@@ -33,7 +32,7 @@ pub struct PeerContext {
 }
 
 impl PeerContext {
-    fn new(handle: Handle) -> PeerContext {
+    pub fn new(handle: Handle) -> PeerContext {
         let instances_executor = executor::InstancesExecutor::new(handle);
 
         PeerContext {
@@ -43,13 +42,13 @@ impl PeerContext {
     }
 
     pub fn register_service<S: Server + 'static>(&mut self, service: S) {
-        self.inner.lock().unwrap().register_service(service);
+        self.inner.borrow_mut().register_service(service);
     }
 
     pub fn add_server_service_instance(
         &mut self,
         inst_id: ServiceId,
-        inst: Box<ServerResult<Item = (), Error = Error>>,
+        inst: Box<ServiceInstance<Item = (), Error = Error>>,
     ) {
         self.instances_executor.add_server_service_instance(inst_id, inst);
     }

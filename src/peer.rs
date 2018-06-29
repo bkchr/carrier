@@ -1,20 +1,20 @@
 use context::PeerContext;
 use error::*;
 use protocol::Protocol;
-use service::{Client, Server};
-use stream::ProtocolStream;
+use service::{Client, Server, ServiceId, ServiceInstance};
+use stream::{protocol_stream_create, NewStreamHandle, ProtocolStream, Stream};
 
-use std::fs::File;
-use std::io::Read;
-use std::net::ToSocketAddrs;
-use std::path::Path;
-use std::path::PathBuf;
+use std::{
+    fs::File, io::Read, net::ToSocketAddrs, path::{Path, PathBuf}, result,
+};
 
 use hole_punch::{
     self, Config, ConfigBuilder, Context, CreateConnectionToPeerHandle, FileFormat, PubKeyHash,
 };
 
-use futures::{sync::oneshot, Async::Ready, Future, Poll, Stream as FStream};
+use futures::{
+    sync::oneshot, Async::{NotReady, Ready}, Future, Poll, Sink, Stream as FStream,
+};
 
 use tokio_core::reactor::{Core, Handle};
 
@@ -23,7 +23,9 @@ use openssl::pkey::{PKey, Private};
 pub struct PeerBuilder {
     config: ConfigBuilder,
     handle: Handle,
-    context: PeerContext,
+    peer_context: PeerContext,
+    private_key: Option<(FileFormat, Vec<u8>)>,
+    private_key_file: Option<PathBuf>,
 }
 
 impl PeerBuilder {
@@ -33,7 +35,9 @@ impl PeerBuilder {
         PeerBuilder {
             config,
             handle,
-            context: PeerContext::new(),
+            peer_context: PeerContext::new(handle.clone()),
+            private_key: None,
+            private_key_file: None,
         }
     }
 
@@ -46,6 +50,8 @@ impl PeerBuilder {
     /// Set the TLS private key filename.
     /// The key needs to be in `PEM` format.
     pub fn set_private_key_file<K: Into<PathBuf>>(mut self, path: K) -> PeerBuilder {
+        let path = path.into();
+        self.private_key_file = Some(path.clone());
         self.config.set_key_filename(path);
         self
     }
@@ -60,17 +66,14 @@ impl PeerBuilder {
     /// Set the TLS private key for this peer from memory.
     /// This will overwrite any prior call to `set_private_key_filename`.
     pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> PeerBuilder {
+        self.private_key = Some((format, key.clone()));
         self.config.set_key(key, format);
         self
     }
 
     /// Register the given service at this peer.
     pub fn register_service<S: Server + 'static>(self, service: S) -> PeerBuilder {
-        let name = service.name();
-        self.peer_context
-            .borrow_mut()
-            .services
-            .insert(name.into(), Box::new(service));
+        self.peer_context.register_service(service);
         self
     }
 
@@ -102,28 +105,18 @@ impl PeerBuilder {
     /// Builds the `Peer` instance.
     pub fn build(self) -> Result<Peer> {
         let private_key = self.load_private_key()?;
-        let peer_context = self.peer_context.clone();
-        let peer_context2 = self.peer_context;
-        let mut context = Context::new(self.handle.clone(), self.config)?;
-        let handle = self.handle.clone();
-        let handle2 = self.handle;
-        let future = context
-            .create_connection_to_server(&server)
-            .map_err(|e| e.into())
-            .and_then(move |s| {
-                let mut con = Connection::new(s, peer_context, handle);
-                con.send_hello(private_key, server)?;
-                Ok(con)
-            })
-            .map(move |c| Peer::new(handle2, context, peer_context2, c));
-
-        Ok(Peer::new())
+        let context = Context::new(
+            PubKeyHash::from_private_key(private_key, true)?,
+            self.handle.clone(),
+            self.config.build()?,
+        )?;
+        Ok(Peer::new(self.handle, context, self.peer_context))
     }
 
     fn load_private_key(&self) -> Result<PKey<Private>> {
-        if let Some((format, ref data)) = self.config.quic_config.key {
+        if let Some((format, ref data)) = self.private_key {
             self.load_private_key_from_memory(format, data)
-        } else if let Some(ref path) = self.config.quic_config.key_filename {
+        } else if let Some(ref path) = self.private_key_file {
             self.load_private_key_from_file(path)
         } else {
             bail!("No private key given!")
@@ -167,7 +160,7 @@ fn spawn_hole_punch_context(
                 Ok(())
             })
             .then(|r| {
-                let _ = sender.send(r);
+                let _ = sender.send(r.map_err(|e| e.into()));
                 Ok(())
             }),
     );
@@ -190,14 +183,14 @@ impl Peer {
 
         Peer {
             handle,
-            context,
             peer_context,
             context_result,
+            create_connection_to_peer_handle,
         }
     }
 
     /// Create a `PeerBuilder` for building a `Peer` instance.
-    pub fn builder(handle: &Handle) -> PeerBuilder {
+    pub fn builder(handle: Handle) -> PeerBuilder {
         PeerBuilder::new(handle)
     }
 
@@ -208,29 +201,85 @@ impl Peer {
 
     /// Connect to the given `Peer` and run the given `Service` (locally and remotely).
     pub fn run_service<S: Client>(
-        self,
+        &self,
         service: S,
-        peer: &PubKeyHash,
-        handle: Handle,
-    ) -> Result<impl Future<Item = S::Item, Error = S::Error>>
+        peer: PubKeyHash,
+    ) -> impl Future<Item = <S::Instance as Future>::Item, Error = S::Error>
     where
-        Error: From<S::Error>,
+        S::Error: From<Error>,
     {
         let name = service.name();
-        self.context
+        self.create_connection_to_peer_handle
             .create_connection_to_peer(peer)
+            .map_err(|e| e.into())
             .and_then(|stream| {
-                let stream: ProtocolStream = stream.into();
+                let stream = protocol_stream_create(stream);
                 stream
                     .send(Protocol::RequestServiceStart { name: name.into() })
-                    .and_then(|s| s.into_future())
+                    .and_then(|s| s.into_future().map_err(|e| e.0))
+                    .map_err(|e| e.into())
             })
             .and_then(|(msg, stream)| match msg {
                 None => bail!("Stream closed while requesting service!"),
-                Some(Protocol::ServiceStarted { id }) => {}
+                Some(Protocol::ServiceStarted { id }) => RunService::new(
+                    service,
+                    id,
+                    stream.into(),
+                    &self.handle,
+                    &mut self.peer_context,
+                ),
                 Some(Protocol::ServiceNotFound) => bail!("Requested service({}) not found!", name),
                 _ => bail!("Received not expected message!"),
             })
+            .flatten()
+    }
+}
+
+struct RunService<I, E> {
+    instance: Box<dyn ServiceInstance<Item = I, Error = E>>,
+    result_sender: Option<oneshot::Sender<result::Result<I, E>>>,
+}
+
+impl<I, E> RunService<I, E> {
+    fn new<S: Client<Error = E>>(
+        service: S,
+        service_id: ServiceId,
+        stream: Stream,
+        handle: &Handle,
+        peer_context: &mut PeerContext,
+    ) -> result::Result<oneshot::Receiver<result::Result<I, E>>, E>
+    where
+        S::Error: From<Error>,
+        S::Instance: Future<Item=I, Error=E> + 'static
+    {
+        let (result_sender, result_recv) = oneshot::channel();
+        let stream = stream.into();
+        let new_stream_handle = NewStreamHandle::new(service_id, &stream);
+        let instance = service.start(handle, stream, new_stream_handle)?;
+
+        let run_service = RunService {
+            instance: Box::new(instance),
+            result_sender: Some(result_sender),
+        };
+
+        Ok(result_recv)
+    }
+}
+
+impl<Item, Error> ServiceInstance for RunService<Item, Error> {
+    fn incoming_stream(&mut self, stream: Stream) {
+        self.instance.incoming_stream(stream);
+    }
+}
+
+impl<Item, Error> Future for RunService<Item, Error> {
+    type Item = ();
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        match self.instance.poll() {
+            _ => return Ok(NotReady),
+        }
     }
 }
 
@@ -239,7 +288,11 @@ impl Future for Peer {
     type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        self.context_result.poll()
+        match self.context_result.poll() {
+            Err(_) => Ok(Ready(())),
+            Ok(Ready(res)) => Ok(Ready(res?)),
+            Ok(NotReady) => Ok(NotReady),
+        }
     }
 }
 
@@ -251,7 +304,7 @@ struct IncomingStream {
 impl IncomingStream {
     fn new(stream: hole_punch::Stream, context: PeerContext) -> IncomingStream {
         IncomingStream {
-            stream: stream.into(),
+            stream: protocol_stream_create(stream),
             context,
         }
     }
@@ -264,8 +317,9 @@ impl Future for IncomingStream {
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         loop {
             match try_ready!(self.stream.poll()) {
-                Protocol::ConnectToService { id } => {}
-                Protocol::RequestServiceStart { id } => {}
+                None => return Ok(Ready(())),
+                Some(Protocol::ConnectToService { id }) => {}
+                Some(Protocol::RequestServiceStart { name }) => {}
                 _ => bail!("Unexpected message at IncomingStream."),
             };
         }

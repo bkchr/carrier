@@ -21,15 +21,10 @@ pub mod lifeline;
 
 pub type ServiceId = u64;
 
-pub trait ServiceInstance {
+pub trait ServiceInstance: Future {
     /// A new incoming `Stream` for this `ServiceInstance`.
     fn incoming_stream(&mut self, stream: Stream);
 }
-
-/// A super trait representing the result of starting a server service instance.
-pub trait ServerResult: ServiceInstance + Future<Item = (), Error = Error> {}
-
-impl<T: ServiceInstance + Future<Item = (), Error = Error>> ServerResult for T {}
 
 /// Server side of a service.
 pub trait Server {
@@ -39,16 +34,18 @@ pub trait Server {
         handle: &Handle,
         stream: Stream,
         new_stream_handle: NewStreamHandle,
-    ) -> Result<Box<ServerResult<Item = (), Error = Error>>>;
+    ) -> Result<Box<ServiceInstance<Item = (), Error = Error>>>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }
 
 /// Client side of a service.
-pub trait Client {
-    type Item;
+pub trait Client
+where
+    Self::Error: From<Error>,
+{
+    type Instance: ServiceInstance;
     type Error;
-    type Future: Future<Item = Self::Item, Error = Self::Error> + ServiceInstance;
     /// Starts a new client instance.
     /// The returned `Future` should resolve, when the service is finished.
     fn start(
@@ -56,7 +53,7 @@ pub trait Client {
         handle: &Handle,
         stream: Stream,
         new_stream_handle: NewStreamHandle,
-    ) -> result::Result<Self::Future, Self::Error>;
+    ) -> result::Result<Self::Instance, Self::Error>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }

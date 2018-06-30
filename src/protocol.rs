@@ -7,7 +7,7 @@ pub enum Protocol {
     /// If the service is available on the peer, a `ServiceStarted` will be send. The stream is
     /// afterwards only usable by the service. If the service is not available, a `ServiceNotFound`
     /// will be send.
-    RequestServiceStart { name: String },
+    RequestServiceStart { name: String, local_id: ServiceId },
     /// The requested service could not be found on the peer.
     ServiceNotFound,
     /// The requested Service was started on the peer with the given id.

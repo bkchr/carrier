@@ -1,6 +1,6 @@
-use super::{Client, Server, ServiceInstance};
+use super::{Client, Server, Streams};
 use error::*;
-use {NewStreamHandle, Stream};
+use NewStreamHandle;
 
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Handle;
@@ -30,16 +30,11 @@ impl Lifeline {
 }
 
 impl Server for Lifeline {
-    fn start(
-        &mut self,
-        handle: &Handle,
-        con: Stream,
-        _: NewStreamHandle,
-    ) -> Result<Box<ServiceInstance<Item = (), Error = Error>>> {
+    fn start(&mut self, handle: &Handle, streams: Streams, _: NewStreamHandle) {
         handle.spawn(
             TcpStream::connect(&([127, 0, 0, 1], 22).into(), &handle)
                 .and_then(move |tcp| {
-                    let (read, write) = AsyncRead::split(con);
+                    let (read, write) = AsyncRead::split(stream);
                     let (read2, write2) = tcp.split();
 
                     io::copy(read, write2)
@@ -50,8 +45,6 @@ impl Server for Lifeline {
                 })
                 .map_err(|e| println!("ERROR: {:?}", e)),
         );
-
-        Ok(())
     }
 
     fn name(&self) -> &'static str {
@@ -129,15 +122,11 @@ impl Future for LifelineClientFuture {
     }
 }
 
-impl ServiceInstance for LifelineClientFuture {
-    fn incoming_stream(&mut self, _: Stream) {}
-}
-
 impl Client for Lifeline {
     type Error = Error;
-    type Instance = LifelineClientFuture;
+    type Future = LifelineClientFuture;
 
-    fn start(self, handle: &Handle, stream: Stream, _: NewStreamHandle) -> Result<Self::Instance> {
+    fn start(self, handle: &Handle, stream: Stream, _: NewStreamHandle) -> Result<Self::Future> {
         LifelineClientFuture::new(handle, stream)
     }
 

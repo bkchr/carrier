@@ -1,7 +1,7 @@
 use context::PeerContext;
 use error::*;
 use protocol::Protocol;
-use service::{Client, Server, ServiceId, ServiceInstance};
+use service::{Client, Server, ServiceId};
 use stream::{protocol_stream_create, NewStreamHandle, ProtocolStream, Stream};
 
 use std::{
@@ -154,7 +154,7 @@ fn spawn_hole_punch_context(
         context
             .for_each(|stream| {
                 inner_handle.spawn(
-                    IncomingStream::new(stream, peer_context.clone())
+                    build_incoming_stream_future(stream, peer_context, inner_handle.clone())
                         .map_err(|e| println!("IncomingStream error: {:?}", e)),
                 );
                 Ok(())
@@ -209,77 +209,35 @@ impl Peer {
         S::Error: From<Error>,
     {
         let name = service.name();
+        let local_service_id = self.peer_context.next_service_id();
         self.create_connection_to_peer_handle
             .create_connection_to_peer(peer)
             .map_err(|e| e.into())
             .and_then(|stream| {
                 let stream = protocol_stream_create(stream);
                 stream
-                    .send(Protocol::RequestServiceStart { name: name.into() })
+                    .send(Protocol::RequestServiceStart {
+                        name: name.into(),
+                        id: local_service_id,
+                    })
                     .and_then(|s| s.into_future().map_err(|e| e.0))
                     .map_err(|e| e.into())
             })
             .and_then(|(msg, stream)| match msg {
                 None => bail!("Stream closed while requesting service!"),
-                Some(Protocol::ServiceStarted { id }) => RunService::new(
-                    service,
-                    id,
-                    stream.into(),
-                    &self.handle,
-                    &mut self.peer_context,
-                ),
+                Some(Protocol::ServiceStarted { id }) => {
+                    self.peer_context.start_client_service_instance(
+                        service,
+                        local_service_id,
+                        id,
+                        stream,
+                        &self.handle,
+                    )
+                }
                 Some(Protocol::ServiceNotFound) => bail!("Requested service({}) not found!", name),
                 _ => bail!("Received not expected message!"),
             })
             .flatten()
-    }
-}
-
-struct RunService<I, E> {
-    instance: Box<dyn ServiceInstance<Item = I, Error = E>>,
-    result_sender: Option<oneshot::Sender<result::Result<I, E>>>,
-}
-
-impl<I, E> RunService<I, E> {
-    fn new<S: Client<Error = E>>(
-        service: S,
-        service_id: ServiceId,
-        stream: Stream,
-        handle: &Handle,
-        peer_context: &mut PeerContext,
-    ) -> result::Result<oneshot::Receiver<result::Result<I, E>>, E>
-    where
-        S::Error: From<Error>,
-        S::Instance: Future<Item=I, Error=E> + 'static
-    {
-        let (result_sender, result_recv) = oneshot::channel();
-        let stream = stream.into();
-        let new_stream_handle = NewStreamHandle::new(service_id, &stream);
-        let instance = service.start(handle, stream, new_stream_handle)?;
-
-        let run_service = RunService {
-            instance: Box::new(instance),
-            result_sender: Some(result_sender),
-        };
-
-        Ok(result_recv)
-    }
-}
-
-impl<Item, Error> ServiceInstance for RunService<Item, Error> {
-    fn incoming_stream(&mut self, stream: Stream) {
-        self.instance.incoming_stream(stream);
-    }
-}
-
-impl<Item, Error> Future for RunService<Item, Error> {
-    type Item = ();
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.instance.poll() {
-            _ => return Ok(NotReady),
-        }
     }
 }
 
@@ -296,32 +254,18 @@ impl Future for Peer {
     }
 }
 
-struct IncomingStream {
+fn build_incoming_stream_future(
     stream: ProtocolStream,
     context: PeerContext,
-}
-
-impl IncomingStream {
-    fn new(stream: hole_punch::Stream, context: PeerContext) -> IncomingStream {
-        IncomingStream {
-            stream: protocol_stream_create(stream),
-            context,
+    handle: Handle,
+) -> impl Future<Item = (), Error = Error> {
+    stream.into_future().and_then(|(stream, msg)| match msg {
+        None => Ok(()),
+        Some(Protocol::ConnectToService { id }) => Ok(()),
+        Some(Protocol::RequestServiceStart { name, local_id }) => {
+            context.start_server_service_instance(&name, local_id, stream.into(), handle);
+            Ok(())
         }
-    }
-}
-
-impl Future for IncomingStream {
-    type Item = ();
-    type Error = Error;
-
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        loop {
-            match try_ready!(self.stream.poll()) {
-                None => return Ok(Ready(())),
-                Some(Protocol::ConnectToService { id }) => {}
-                Some(Protocol::RequestServiceStart { name }) => {}
-                _ => bail!("Unexpected message at IncomingStream."),
-            };
-        }
-    }
+        _ => bail!("Unexpected message at incoming Stream."),
+    })
 }

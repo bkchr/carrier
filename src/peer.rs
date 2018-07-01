@@ -42,6 +42,12 @@ impl PeerBuilder {
         }
     }
 
+    /// Set Quic listen port.
+    pub fn set_quic_listen_port(mut self, port: u16) -> PeerBuilder {
+        self.config.set_quic_listen_port(port);
+        self
+    }
+
     /// Set the TLS certificate filename.
     pub fn set_cert_chain_file<C: Into<PathBuf>>(mut self, path: C) -> PeerBuilder {
         self.config.set_cert_chain_filename(path);

@@ -3,7 +3,7 @@ extern crate tokio_core;
 
 use tokio_core::reactor::Core;
 
-use std::{env::var, net::IpAddr};
+use std::env::var;
 
 fn main() {
     let certificate_path =
@@ -14,13 +14,6 @@ fn main() {
         .map(|v| v.parse())
         .unwrap_or(Ok(22222))
         .expect("Integer value for `CARRIER_LISTEN_PORT`");
-    let bearer_address: IpAddr = var("CARRIER_BEARER_ADDR")
-        .expect(
-            "Please specify bearer address \
-             (public reachable address of this bearer) via `CARRIER_BEARER_ADDR`",
-        )
-        .parse()
-        .expect("Invalid bearer address");
     let client_ca_path = var("CARRIER_CLIENT_CA_PATH").expect(
         "Please give path to client certificate authorities(*.pem) via `CARRIER_CLIENT_CA_PATH`",
     );
@@ -30,14 +23,16 @@ fn main() {
 
     let mut evt_loop = Core::new().unwrap();
 
-    let server = carrier::Bearer::builder(&evt_loop.handle(), (bearer_address, listen_port).into())
+    let builder = carrier::Peer::builder(evt_loop.handle())
         .set_quic_listen_port(listen_port)
         .set_cert_chain_file(certificate_path)
         .set_private_key_file(key_path)
-        .set_client_ca_cert_files(client_ca_vec)
-        .build()
-        .unwrap();
+        .set_client_ca_cert_files(client_ca_vec);
+
+    let builder = carrier::service::register_builtin_services(builder);
 
     println!("Bearer running (Port: {})", listen_port);
-    server.run(&mut evt_loop).unwrap();
+    let bearer = builder.build().unwrap();
+
+    bearer.run(&mut evt_loop).unwrap();
 }

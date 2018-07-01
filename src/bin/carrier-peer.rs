@@ -29,16 +29,17 @@ fn main() {
 
     let mut evt_loop = Core::new().unwrap();
 
-    let builder = carrier::Peer::builder(&evt_loop.handle())
+    let builder = carrier::Peer::builder(evt_loop.handle())
         .set_cert_chain_file(certificate_path)
         .set_private_key_file(key_path)
         .set_client_ca_cert_files(client_ca_vec)
-        .set_server_ca_cert_files(server_ca_vec);
+        .set_server_ca_cert_files(server_ca_vec)
+        .add_remote_peer(bearer_addr.clone()).unwrap();
 
     let builder = carrier::service::register_builtin_services(builder);
 
     println!("Peer connects to bearer({})", bearer_addr);
-    let peer = evt_loop.run(builder.build(&bearer_addr).unwrap()).unwrap();
+    let peer = builder.build().unwrap();
 
     println!("Peer running");
     peer.run(&mut evt_loop).unwrap();

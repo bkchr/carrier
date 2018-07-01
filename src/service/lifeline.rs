@@ -1,6 +1,6 @@
 use super::{Client, Server, Streams};
 use error::*;
-use NewStreamHandle;
+use {NewStreamHandle, Stream};
 
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Handle;
@@ -31,18 +31,29 @@ impl Lifeline {
 
 impl Server for Lifeline {
     fn start(&mut self, handle: &Handle, streams: Streams, _: NewStreamHandle) {
+        let inner_handle = handle.clone();
         handle.spawn(
-            TcpStream::connect(&([127, 0, 0, 1], 22).into(), &handle)
-                .and_then(move |tcp| {
-                    let (read, write) = AsyncRead::split(stream);
-                    let (read2, write2) = tcp.split();
+            streams
+                .into_future()
+                .map_err(|e| e.0)
+                .and_then(move |(stream, _)| match stream {
+                    Some(stream) => Ok(TcpStream::connect(
+                        &([127, 0, 0, 1], 22).into(),
+                        &inner_handle,
+                    ).map_err(|e| e.into())
+                        .and_then(move |tcp| {
+                            let (read, write) = AsyncRead::split(stream);
+                            let (read2, write2) = tcp.split();
 
-                    io::copy(read, write2)
-                        .map(|_| ())
-                        .select(io::copy(read2, write).map(|_| ()))
-                        .map(|_| ())
-                        .map_err(|e| e.0)
+                            io::copy(read, write2)
+                                .map(|_| ())
+                                .select(io::copy(read2, write).map(|_| ()))
+                                .map(|_| ())
+                                .map_err(|e| Error::from(e.0))
+                        })),
+                    None => bail!("No `Stream` for Lifeline"),
                 })
+                .flatten()
                 .map_err(|e| println!("ERROR: {:?}", e)),
         );
     }
@@ -70,7 +81,7 @@ impl<R: AsyncRead> StdinReader<R> {
 
 impl<R: AsyncRead> Future for StdinReader<R> {
     type Item = ();
-    type Error = std::io::Error;
+    type Error = Error;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         loop {
@@ -84,29 +95,38 @@ impl<R: AsyncRead> Future for StdinReader<R> {
     }
 }
 
-struct LifelineClientFuture {
+pub struct LifelineClientFuture {
     future: Box<Future<Item = (), Error = Error>>,
 }
 
 impl LifelineClientFuture {
-    fn new(handle: &Handle, stream: Stream) -> Result<LifelineClientFuture> {
+    fn new(handle: &Handle, streams: Streams) -> Result<LifelineClientFuture> {
         let lock = LIFELINE_STDIN.lock();
         let stdin = tokio_file_unix::StdFile(lock);
         let stdin = tokio_file_unix::File::new_nb(stdin)?;
         let stdin = stdin.into_reader(&handle)?;
 
-        let (sink, stream) = FStream::split(stream);
-
         let future = Box::new(
-            stream
-                .for_each(|buf| {
-                    std::io::stdout().write(&buf)?;
-                    std::io::stdout().flush()?;
-                    Ok(())
+            streams
+                .into_future()
+                .map_err(|e| e.0)
+                .and_then(|(stream, _)| match stream {
+                    Some(stream) => {
+                        let (sink, stream) = FStream::split(stream);
+
+                        Ok(stream
+                            .for_each(|buf| {
+                                std::io::stdout().write(&buf)?;
+                                std::io::stdout().flush()?;
+                                Ok(())
+                            })
+                            .map_err(|e| e.into())
+                            .join(StdinReader::new(stdin, sink).map_err(|e| e.into()))
+                            .map(|_| ()))
+                    }
+                    None => bail!("No `Stream` for Lifeline"),
                 })
-                .map_err(|e| e.into())
-                .join(StdinReader::new(stdin, sink).map_err(|e| e.into()))
-                .map(|_| ()),
+                .flatten(),
         );
 
         Ok(LifelineClientFuture { future })
@@ -126,8 +146,8 @@ impl Client for Lifeline {
     type Error = Error;
     type Future = LifelineClientFuture;
 
-    fn start(self, handle: &Handle, stream: Stream, _: NewStreamHandle) -> Result<Self::Future> {
-        LifelineClientFuture::new(handle, stream)
+    fn start(self, handle: &Handle, streams: Streams, _: NewStreamHandle) -> Result<Self::Future> {
+        LifelineClientFuture::new(handle, streams)
     }
 
     fn name(&self) -> &'static str {

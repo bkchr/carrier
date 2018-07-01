@@ -1,7 +1,6 @@
 extern crate bytes;
 #[macro_use]
 extern crate failure;
-#[macro_use]
 extern crate futures;
 extern crate glob;
 extern crate hole_punch;

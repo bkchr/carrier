@@ -2,14 +2,14 @@ use context::PeerContext;
 use error::*;
 use protocol::Protocol;
 use service::{Client, Server};
-use stream::{protocol_stream_create, NewStreamHandle, ProtocolStream, Stream};
+use stream::{protocol_stream_create, ProtocolStream};
 
 use std::{
-    fs::File, io::Read, net::ToSocketAddrs, path::{Path, PathBuf}, result,
+    fs::File, io::Read, net::ToSocketAddrs, path::{Path, PathBuf},
 };
 
 use hole_punch::{
-    self, Config, ConfigBuilder, Context, CreateConnectionToPeerHandle, FileFormat, PubKeyHash,
+    Config, ConfigBuilder, Context, CreateConnectionToPeerHandle, FileFormat, PubKeyHash,
 };
 
 use futures::{
@@ -31,11 +31,12 @@ pub struct PeerBuilder {
 impl PeerBuilder {
     fn new(handle: Handle) -> PeerBuilder {
         let config = Config::builder();
+        let peer_context = PeerContext::new(handle.clone());
 
         PeerBuilder {
             config,
             handle,
-            peer_context: PeerContext::new(handle.clone()),
+            peer_context,
             private_key: None,
             private_key_file: None,
         }
@@ -72,7 +73,7 @@ impl PeerBuilder {
     }
 
     /// Register the given service at this peer.
-    pub fn register_service<S: Server + 'static>(self, service: S) -> PeerBuilder {
+    pub fn register_service<S: Server + 'static>(mut self, service: S) -> PeerBuilder {
         self.peer_context.register_service(service);
         self
     }
@@ -152,11 +153,11 @@ fn spawn_hole_punch_context(
     let inner_handle = handle.clone();
     handle.spawn(
         context
-            .for_each(|stream| {
+            .for_each(move |stream| {
                 inner_handle.spawn(
                     build_incoming_stream_future(
                         protocol_stream_create(stream),
-                        peer_context,
+                        peer_context.clone(),
                         inner_handle.clone(),
                     ).map_err(|e| println!("IncomingStream error: {:?}", e)),
                 );
@@ -203,16 +204,23 @@ impl Peer {
     }
 
     /// Connect to the given `Peer` and run the given `Service` (locally and remotely).
-    pub fn run_service<S: Client>(&self, service: S, peer: PubKeyHash) -> S::Future
+    pub fn run_service<S: Client>(
+        &mut self,
+        service: S,
+        peer: PubKeyHash,
+    ) -> impl Future<Item = <S::Future as Future>::Item, Error = S::Error>
     where
         S::Error: From<Error>,
     {
         let name = service.name();
         let local_service_id = self.peer_context.next_service_id();
+        let handle = self.handle.clone();
+        let mut peer_context = self.peer_context.clone();
+
         self.create_connection_to_peer_handle
             .create_connection_to_peer(peer)
             .map_err(|e| Error::from(e))
-            .and_then(|stream| {
+            .and_then(move |stream| {
                 let stream = protocol_stream_create(stream);
                 stream
                     .send(Protocol::RequestServiceStart {
@@ -222,20 +230,20 @@ impl Peer {
                     .and_then(|s| s.into_future().map_err(|e| e.0))
                     .map_err(|e| Error::from(e))
             })
-            .and_then(|(msg, stream)| match msg {
+            .and_then(move |(msg, stream)| match msg {
                 None => bail!("Stream closed while requesting service!"),
                 Some(Protocol::ServiceStarted { id }) => Ok((id, stream)),
                 Some(Protocol::ServiceNotFound) => bail!("Requested service({}) not found!", name),
                 _ => bail!("Received not expected message!"),
             })
             .map_err(|e| e.into())
-            .and_then(|(id, stream)| {
-                self.peer_context.start_client_service_instance(
+            .and_then(move |(id, stream)| {
+                peer_context.start_client_service_instance(
                     service,
                     local_service_id,
                     id,
                     stream.into(),
-                    &self.handle,
+                    &handle,
                 )
             })
             .flatten()
@@ -257,13 +265,13 @@ impl Future for Peer {
 
 fn build_incoming_stream_future(
     stream: ProtocolStream,
-    context: PeerContext,
+    mut context: PeerContext,
     handle: Handle,
 ) -> impl Future<Item = (), Error = Error> {
     stream
         .into_future()
         .map_err(|e| e.0.into())
-        .and_then(|(msg, stream)| match msg {
+        .and_then(move |(msg, stream)| match msg {
             None => Ok(()),
             Some(Protocol::ConnectToService { id }) => {
                 context.connect_stream_to_service_instance(stream.into(), id);

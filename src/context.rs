@@ -72,20 +72,20 @@ impl Inner {
         mut stream: ProtocolStream,
         handle: &Handle,
     ) {
-        match self.services.get(name) {
-            Some(service_start) => {
-                let id = self.next_service_id();
-                send_protocol_message(&mut stream, Protocol::ServiceStarted { id });
+        if self.services.contains_key(name) {
+            let id = self.next_service_id();
+            send_protocol_message(&mut stream, Protocol::ServiceStarted { id });
 
-                let (new_stream_handle, streams) =
-                    self.create_new_stream_handle_and_streams(stream.into(), id, remote_service_id);
+            let (new_stream_handle, streams) =
+                self.create_new_stream_handle_and_streams(stream.into(), id, remote_service_id);
 
-                service_start.start(handle, streams, new_stream_handle);
-            }
-            None => {
-                send_protocol_message(&mut stream, Protocol::ServiceNotFound);
-            }
-        };
+            self.services
+                .get_mut(name)
+                .unwrap()
+                .start(handle, streams, new_stream_handle);
+        } else {
+            send_protocol_message(&mut stream, Protocol::ServiceNotFound);
+        }
     }
 
     fn start_client_service_instance<C>(
@@ -107,11 +107,11 @@ impl Inner {
 
     fn connect_stream_to_service_instance(
         &mut self,
-        stream: ProtocolStream,
+        mut stream: ProtocolStream,
         service_id: ServiceId,
     ) {
         match self.service_instances.get_mut(&service_id) {
-            Some(mut instance) => {
+            Some(instance) => {
                 send_protocol_message(&mut stream, Protocol::ServiceConnected);
                 let _ = instance.unbounded_send(stream.into());
             }
@@ -130,11 +130,11 @@ fn send_protocol_message(stream: &mut ProtocolStream, msg: Protocol) {
 /// Spawn the service dropped receiver that informs the `PeerContext` about dropped service
 /// instances.
 fn spawn_service_dropped(
-    context: PeerContext,
+    mut context: PeerContext,
     service_dropped: Receiver<ServiceId>,
     handle: Handle,
 ) {
-    handle.spawn(service_dropped.for_each(|id| {
+    handle.spawn(service_dropped.for_each(move |id| {
         context.service_instance_dropped(id);
         Ok(())
     }));

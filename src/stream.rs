@@ -102,12 +102,12 @@ impl NewStreamHandle {
         }
     }
 
-    pub fn new_stream(&self) -> impl Future<Item = Stream, Error = Error> {
+    pub fn new_stream(&mut self) -> impl Future<Item = Stream, Error = Error> {
         let service_id = self.service_id;
         self.new_stream_handle
             .new_stream()
             .map_err(|e| e.into())
-            .and_then(|stream| {
+            .and_then(move |stream| {
                 let stream = protocol_stream_create(stream.into());
                 stream
                     .send(Protocol::ConnectToService { id: service_id })

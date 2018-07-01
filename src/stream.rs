@@ -103,18 +103,20 @@ impl NewStreamHandle {
     }
 
     pub fn new_stream(&self) -> impl Future<Item = Stream, Error = Error> {
+        let service_id = self.service_id;
         self.new_stream_handle
             .new_stream()
+            .map_err(|e| e.into())
             .and_then(|stream| {
+                let stream = protocol_stream_create(stream.into());
                 stream
-                    .send(Protocol::ConnectToService {
-                        id: self.service_id,
-                    })
-                    .and_then(|s| s.into_future())
+                    .send(Protocol::ConnectToService { id: service_id })
+                    .map_err(|e| e.into())
+                    .and_then(|s| s.into_future().map_err(|e| e.0.into()))
             })
             .and_then(|(msg, stream)| match msg {
                 None => bail!("Stream closed!"),
-                Some(Protocol::ServiceConnected) => stream.into(),
+                Some(Protocol::ServiceConnected) => Ok(stream.into()),
                 Some(Protocol::ServiceNotFound) => bail!("Could not find requested service!"),
                 _ => bail!("Received unexpected message!"),
             })

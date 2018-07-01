@@ -1,7 +1,7 @@
 use context::PeerContext;
 use error::*;
 use protocol::Protocol;
-use service::{Client, Server, ServiceId};
+use service::{Client, Server};
 use stream::{protocol_stream_create, NewStreamHandle, ProtocolStream, Stream};
 
 use std::{
@@ -154,8 +154,11 @@ fn spawn_hole_punch_context(
         context
             .for_each(|stream| {
                 inner_handle.spawn(
-                    build_incoming_stream_future(stream, peer_context, inner_handle.clone())
-                        .map_err(|e| println!("IncomingStream error: {:?}", e)),
+                    build_incoming_stream_future(
+                        protocol_stream_create(stream),
+                        peer_context,
+                        inner_handle.clone(),
+                    ).map_err(|e| println!("IncomingStream error: {:?}", e)),
                 );
                 Ok(())
             })
@@ -200,11 +203,7 @@ impl Peer {
     }
 
     /// Connect to the given `Peer` and run the given `Service` (locally and remotely).
-    pub fn run_service<S: Client>(
-        &self,
-        service: S,
-        peer: PubKeyHash,
-    ) -> impl Future<Item = <S::Instance as Future>::Item, Error = S::Error>
+    pub fn run_service<S: Client>(&self, service: S, peer: PubKeyHash) -> S::Future
     where
         S::Error: From<Error>,
     {
@@ -212,30 +211,32 @@ impl Peer {
         let local_service_id = self.peer_context.next_service_id();
         self.create_connection_to_peer_handle
             .create_connection_to_peer(peer)
-            .map_err(|e| e.into())
+            .map_err(|e| Error::from(e))
             .and_then(|stream| {
                 let stream = protocol_stream_create(stream);
                 stream
                     .send(Protocol::RequestServiceStart {
                         name: name.into(),
-                        id: local_service_id,
+                        local_id: local_service_id,
                     })
                     .and_then(|s| s.into_future().map_err(|e| e.0))
-                    .map_err(|e| e.into())
+                    .map_err(|e| Error::from(e))
             })
             .and_then(|(msg, stream)| match msg {
                 None => bail!("Stream closed while requesting service!"),
-                Some(Protocol::ServiceStarted { id }) => {
-                    self.peer_context.start_client_service_instance(
-                        service,
-                        local_service_id,
-                        id,
-                        stream,
-                        &self.handle,
-                    )
-                }
+                Some(Protocol::ServiceStarted { id }) => Ok((id, stream)),
                 Some(Protocol::ServiceNotFound) => bail!("Requested service({}) not found!", name),
                 _ => bail!("Received not expected message!"),
+            })
+            .map_err(|e| e.into())
+            .and_then(|(id, stream)| {
+                self.peer_context.start_client_service_instance(
+                    service,
+                    local_service_id,
+                    id,
+                    stream.into(),
+                    &self.handle,
+                )
             })
             .flatten()
     }
@@ -259,13 +260,19 @@ fn build_incoming_stream_future(
     context: PeerContext,
     handle: Handle,
 ) -> impl Future<Item = (), Error = Error> {
-    stream.into_future().and_then(|(stream, msg)| match msg {
-        None => Ok(()),
-        Some(Protocol::ConnectToService { id }) => Ok(()),
-        Some(Protocol::RequestServiceStart { name, local_id }) => {
-            context.start_server_service_instance(&name, local_id, stream.into(), handle);
-            Ok(())
-        }
-        _ => bail!("Unexpected message at incoming Stream."),
-    })
+    stream
+        .into_future()
+        .map_err(|e| e.0.into())
+        .and_then(|(msg, stream)| match msg {
+            None => Ok(()),
+            Some(Protocol::ConnectToService { id }) => {
+                context.connect_stream_to_service_instance(stream.into(), id);
+                Ok(())
+            }
+            Some(Protocol::RequestServiceStart { name, local_id }) => {
+                context.start_server_service_instance(&name, local_id, stream.into(), &handle);
+                Ok(())
+            }
+            _ => bail!("Unexpected message at incoming Stream."),
+        })
 }

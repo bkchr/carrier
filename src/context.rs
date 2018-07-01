@@ -72,19 +72,20 @@ impl Inner {
         mut stream: ProtocolStream,
         handle: &Handle,
     ) {
-        if let Some(ref service_start) = self.services.get(name) {
-            let id = self.next_service_id();
-            let _ = stream.start_send(Protocol::ServiceStarted { id });
-            let _ = stream.poll_complete();
+        match self.services.get(name) {
+            Some(service_start) => {
+                let id = self.next_service_id();
+                send_protocol_message(&mut stream, Protocol::ServiceStarted { id });
 
-            let (new_stream_handle, streams) =
-                self.create_new_stream_handle_and_streams(stream.into(), id, remote_service_id);
+                let (new_stream_handle, streams) =
+                    self.create_new_stream_handle_and_streams(stream.into(), id, remote_service_id);
 
-            service_start.start(handle, streams, new_stream_handle);
-        } else {
-            let _ = stream.start_send(Protocol::ServiceNotFound);
-            let _ = stream.poll_complete();
-        }
+                service_start.start(handle, streams, new_stream_handle);
+            }
+            None => {
+                send_protocol_message(&mut stream, Protocol::ServiceNotFound);
+            }
+        };
     }
 
     fn start_client_service_instance<C>(
@@ -103,6 +104,27 @@ impl Inner {
 
         service.start(handle, streams, new_stream_handle)
     }
+
+    fn connect_stream_to_service_instance(
+        &mut self,
+        stream: ProtocolStream,
+        service_id: ServiceId,
+    ) {
+        match self.service_instances.get_mut(&service_id) {
+            Some(mut instance) => {
+                send_protocol_message(&mut stream, Protocol::ServiceConnected);
+                let _ = instance.unbounded_send(stream.into());
+            }
+            None => {
+                send_protocol_message(&mut stream, Protocol::ServiceNotFound);
+            }
+        }
+    }
+}
+
+fn send_protocol_message(stream: &mut ProtocolStream, msg: Protocol) {
+    let _ = stream.start_send(msg);
+    let _ = stream.poll_complete();
 }
 
 /// Spawn the service dropped receiver that informs the `PeerContext` about dropped service
@@ -153,9 +175,12 @@ impl PeerContext {
         stream: ProtocolStream,
         handle: &Handle,
     ) {
-        self.inner
-            .borrow_mut()
-            .start_server_service_instance(name, remote_service_id, stream, handle);
+        self.inner.borrow_mut().start_server_service_instance(
+            name,
+            remote_service_id,
+            stream,
+            handle,
+        );
     }
 
     pub fn start_client_service_instance<C>(
@@ -179,6 +204,16 @@ impl PeerContext {
     }
 
     pub fn next_service_id(&mut self) -> ServiceId {
-        self.borrow_mut().next_service_id()
+        self.inner.borrow_mut().next_service_id()
+    }
+
+    pub fn connect_stream_to_service_instance(
+        &mut self,
+        stream: ProtocolStream,
+        service_id: ServiceId,
+    ) {
+        self.inner
+            .borrow_mut()
+            .connect_stream_to_service_instance(stream, service_id);
     }
 }

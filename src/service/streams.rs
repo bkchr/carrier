@@ -3,8 +3,8 @@ use error::*;
 use stream::Stream;
 
 use futures::{
-    sync::mpsc::{unbounded, Sender, UnboundedReceiver, UnboundedSender},
-    Async::Ready, Future, Poll, Sink, Stream as FStream,
+    sync::mpsc::{unbounded, Sender, UnboundedReceiver, UnboundedSender}, Async::Ready, Future,
+    Poll, Sink, Stream as FStream,
 };
 
 /// Returns the `Stream`s for a service instance.
@@ -47,7 +47,10 @@ impl FStream for Streams {
     fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
         match self.first_stream.take() {
             Some(stream) => Ok(Ready(Some(stream))),
-            None => self.streams.poll().map_err(|e| e.into()),
+            None => self
+                .streams
+                .poll()
+                .map_err(|_| Error::from("Streams::poll() - unknown error")),
         }
     }
 }

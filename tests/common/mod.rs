@@ -1,15 +1,8 @@
 use carrier::{
-    self,
-    service::{Client, Server},
-    Connection, Error, FileFormat, PubKeyHash,
+    self, service::{Client, Server, Streams}, Error, FileFormat, NewStreamHandle, PubKeyHash,
 };
 
-use std::{
-    net::{IpAddr, SocketAddr},
-    result,
-    sync::mpsc::channel,
-    thread,
-};
+use std::{net::SocketAddr, result, sync::mpsc::channel, thread};
 
 use tokio_core::reactor::{Core, Handle};
 
@@ -27,7 +20,6 @@ pub fn start_bearer() {
         let key = include_bytes!("../../test_certs/bearer.key.pem");
 
         let listen_port = 22222;
-        let bearer_address: IpAddr = [127, 0, 0, 1].into();
 
         let peer_ca_vec = carrier::util::glob_for_certificates(format!(
             "{}/test_certs/trusted_peer_cas",
@@ -36,14 +28,13 @@ pub fn start_bearer() {
 
         let mut evt_loop = Core::new().unwrap();
 
-        let server =
-            carrier::Bearer::builder(&evt_loop.handle(), (bearer_address, listen_port).into())
-                .set_cert_chain(vec![cert.to_vec()], FileFormat::PEM)
-                .set_private_key(key.to_vec(), FileFormat::PEM)
-                .set_client_ca_cert_files(peer_ca_vec)
-                .set_quic_listen_port(listen_port)
-                .build()
-                .unwrap();
+        let server = carrier::Peer::builder(evt_loop.handle())
+            .set_cert_chain(vec![cert.to_vec()], FileFormat::PEM)
+            .set_private_key(key.to_vec(), FileFormat::PEM)
+            .set_client_ca_cert_files(peer_ca_vec)
+            .set_quic_listen_port(listen_port)
+            .build()
+            .unwrap();
 
         send.send(()).unwrap();
         server.run(&mut evt_loop).unwrap();
@@ -73,16 +64,18 @@ pub fn start_peer() {
 
         let mut evt_loop = Core::new().unwrap();
 
-        let builder = carrier::Peer::builder(&evt_loop.handle())
+        let builder = carrier::Peer::builder(evt_loop.handle())
             .set_cert_chain(vec![cert.to_vec()], FileFormat::PEM)
             .set_private_key(key.to_vec(), FileFormat::PEM)
             .set_client_ca_cert_files(peer_ca_vec)
             .set_server_ca_cert_files(bearer_ca_vec)
-            .register_service(TestService {});
+            .register_service(TestService {})
+            .add_remote_peer(bearer_addr)
+            .unwrap();
 
         let builder = carrier::service::register_builtin_services(builder);
 
-        let peer = evt_loop.run(builder.build(&bearer_addr).unwrap()).unwrap();
+        let peer = builder.build().unwrap();
 
         send.send(()).unwrap();
         peer.run(&mut evt_loop).unwrap();
@@ -104,16 +97,16 @@ pub fn run_client() {
         PubKeyHash::from_x509_pem(peer_cert, false).expect("Create peer key from peer cert.");
     println!("PEER: {}", peer_key);
 
-    let builder = carrier::Peer::builder(&evt_loop.handle())
+    let builder = carrier::Peer::builder(evt_loop.handle())
         .set_cert_chain(vec![cert.to_vec()], FileFormat::PEM)
         .set_private_key(key.to_vec(), FileFormat::PEM)
-        .build(&bearer_addr)
+        .add_remote_peer(bearer_addr)
         .unwrap();
 
-    let peer = evt_loop.run(builder).unwrap();
+    let mut peer = builder.build().unwrap();
 
-    let data = peer
-        .run_service(&mut evt_loop, TestService {}, peer_key)
+    let data = evt_loop
+        .run(peer.run_service(TestService {}, peer_key))
         .expect("TestService returns data.");
 
     assert_eq!(TEST_SERVICE_DATA.to_vec(), data);
@@ -122,10 +115,16 @@ pub fn run_client() {
 struct TestService {}
 
 impl Server for TestService {
-    fn spawn(&mut self, handle: &Handle, mut con: Connection) -> Result<()> {
-        con.start_send(TEST_SERVICE_DATA.into())?;
-        con.poll_complete()?;
-        Ok(())
+    fn start(&mut self, handle: &Handle, streams: Streams, new_stream_handle: NewStreamHandle) {
+        handle.spawn(
+            streams
+                .for_each(|mut stream| {
+                    stream.start_send(TEST_SERVICE_DATA.into()).unwrap();
+                    stream.poll_complete().unwrap();
+                    Ok(())
+                })
+                .map_err(|e| panic!(e)),
+        );
     }
 
     fn name(&self) -> &'static str {
@@ -134,15 +133,26 @@ impl Server for TestService {
 }
 
 impl Client for TestService {
-    type Item = Vec<u8>;
     type Error = Error;
-    type Future = Box<Future<Item = Self::Item, Error = Self::Error>>;
+    type Future = Box<Future<Item = Vec<u8>, Error = Self::Error>>;
 
-    fn start(self, _: &Handle, con: Connection) -> Result<Self::Future> {
+    fn start(
+        self,
+        _: &Handle,
+        streams: Streams,
+        new_stream_handle: NewStreamHandle,
+    ) -> Result<Self::Future> {
         Ok(Box::new(
-            con.into_future()
+            streams
+                .into_future()
                 .map_err(|e| e.0.into())
-                .map(|(v, _)| v.unwrap().to_vec()),
+                .and_then(|(stream, _)| {
+                    stream
+                        .unwrap()
+                        .into_future()
+                        .map_err(|e| e.0.into())
+                        .map(|(v, _)| v.unwrap().to_vec())
+                }),
         ))
     }
 

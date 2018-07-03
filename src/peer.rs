@@ -5,7 +5,7 @@ use service::{Client, Server};
 use stream::{protocol_stream_create, ProtocolStream};
 
 use std::{
-    fs::File, io::Read, net::ToSocketAddrs, path::{Path, PathBuf},
+    fs::File, io::Read, net::SocketAddr, net::ToSocketAddrs, path::{Path, PathBuf},
 };
 
 use hole_punch::{
@@ -183,12 +183,14 @@ pub struct Peer {
     peer_context: PeerContext,
     context_result: oneshot::Receiver<Result<()>>,
     create_connection_to_peer_handle: CreateConnectionToPeerHandle,
+    quic_local_addr: SocketAddr,
 }
 
 impl Peer {
     fn new(handle: Handle, context: Context, peer_context: PeerContext) -> Peer {
         let create_connection_to_peer_handle = context.create_connection_to_peer_handle();
 
+        let quic_local_addr = context.quic_local_addr();
         let context_result = spawn_hole_punch_context(context, peer_context.clone(), &handle);
 
         Peer {
@@ -196,6 +198,7 @@ impl Peer {
             peer_context,
             context_result,
             create_connection_to_peer_handle,
+            quic_local_addr,
         }
     }
 
@@ -253,6 +256,11 @@ impl Peer {
                 )
             })
             .flatten()
+    }
+
+    /// The local address of the Quic backend.
+    pub fn quic_local_addr(&self) -> SocketAddr {
+        self.quic_local_addr
     }
 }
 

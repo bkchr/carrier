@@ -3,7 +3,7 @@ use error::*;
 use stream::Stream;
 
 use futures::{
-    sync::mpsc::{unbounded, Sender, UnboundedReceiver, UnboundedSender}, Async::Ready, Poll, Sink,
+    sync::mpsc::{unbounded, Sender, UnboundedReceiver, UnboundedSender}, Async::Ready, Poll,
     Stream as FStream,
 };
 
@@ -57,7 +57,6 @@ impl FStream for Streams {
 
 impl Drop for Streams {
     fn drop(&mut self) {
-        let _ = self.close_send.start_send(self.service_id);
-        let _ = self.close_send.poll_complete();
+        let _ = self.close_send.try_send(self.service_id);
     }
 }

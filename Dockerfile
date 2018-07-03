@@ -1,4 +1,4 @@
-FROM rust:1.25
+FROM rust:latest
 
 RUN apt-get update
 RUN apt install -y clang libssl-dev

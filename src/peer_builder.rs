@@ -37,13 +37,13 @@ impl PeerBuilder {
 
     /// Set Quic listen port.
     pub fn set_quic_listen_port(mut self, port: u16) -> PeerBuilder {
-        self.config.set_quic_listen_port(port);
+        self.config = self.config.set_quic_listen_port(port);
         self
     }
 
     /// Set the TLS certificate filename.
     pub fn set_cert_chain_file<C: Into<PathBuf>>(mut self, path: C) -> PeerBuilder {
-        self.config.set_cert_chain_filename(path);
+        self.config = self.config.set_cert_chain_filename(path);
         self
     }
 
@@ -52,14 +52,14 @@ impl PeerBuilder {
     pub fn set_private_key_file<K: Into<PathBuf>>(mut self, path: K) -> PeerBuilder {
         let path = path.into();
         self.private_key_file = Some(path.clone());
-        self.config.set_key_filename(path);
+        self.config = self.config.set_key_filename(path);
         self
     }
 
     /// Set the TLS certificate chain for this peer from memory.
     /// This will overwrite any prior call to `set_cert_chain_filename`.
     pub fn set_cert_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> PeerBuilder {
-        self.config.set_cert_chain(chain, format);
+        self.config = self.config.set_cert_chain(chain, format);
         self
     }
 
@@ -67,7 +67,7 @@ impl PeerBuilder {
     /// This will overwrite any prior call to `set_private_key_filename`.
     pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> PeerBuilder {
         self.private_key = Some((format, key.clone()));
-        self.config.set_key(key, format);
+        self.config = self.config.set_key(key, format);
         self
     }
 
@@ -81,7 +81,7 @@ impl PeerBuilder {
     /// These CAs will be used to authenticate incoming connections.
     /// When these CAs are not given, all incoming connections will be authenticated successfully.
     pub fn set_client_ca_cert_files(mut self, files: Vec<PathBuf>) -> PeerBuilder {
-        self.config.set_incoming_ca_certificates(files);
+        self.config = self.config.set_incoming_ca_certificates(files);
         self
     }
 
@@ -89,7 +89,7 @@ impl PeerBuilder {
     /// These CAs will be used to authenticate outgoing connections.
     /// When these CAs are not given, all outgoing connections will be trusted.
     pub fn set_server_ca_cert_files(mut self, files: Vec<PathBuf>) -> PeerBuilder {
-        self.config.set_outgoing_ca_certificates(files);
+        self.config = self.config.set_outgoing_ca_certificates(files);
         self
     }
 
@@ -98,7 +98,7 @@ impl PeerBuilder {
     /// closed, a new connection to the next remote peer is created. This ensures that the local
     /// peer is reachable by other peers.
     pub fn add_remote_peer<T: ToSocketAddrs>(mut self, peer: T) -> Result<Self> {
-        self.config.add_remote_peer(peer)?;
+        self.config = self.config.add_remote_peer(peer)?;
         Ok(self)
     }
 

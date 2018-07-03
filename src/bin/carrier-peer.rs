@@ -36,7 +36,7 @@ fn main() {
         .set_server_ca_cert_files(server_ca_vec)
         .add_remote_peer(bearer_addr.clone()).unwrap();
 
-    let builder = carrier::service::register_builtin_services(builder);
+    let builder = carrier::builtin_services::register(builder);
 
     println!("Peer connects to bearer({})", bearer_addr);
     let peer = builder.build().unwrap();

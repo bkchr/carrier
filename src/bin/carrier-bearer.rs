@@ -29,7 +29,7 @@ fn main() {
         .set_private_key_file(key_path)
         .set_client_ca_cert_files(client_ca_vec);
 
-    let builder = carrier::service::register_builtin_services(builder);
+    let builder = carrier::builtin_services::register(builder);
 
     println!("Bearer running (Port: {})", listen_port);
     let bearer = builder.build().unwrap();

@@ -2,7 +2,7 @@ extern crate carrier;
 extern crate hole_punch;
 extern crate tokio_core;
 
-use carrier::service;
+use carrier::builtin_services;
 
 use tokio_core::reactor::Core;
 
@@ -51,6 +51,6 @@ fn main() {
     let mut peer = builder.build().unwrap();
 
     evt_loop
-        .run(peer.run_service(service::lifeline::Lifeline::new(), peer_key))
+        .run(peer.run_service(builtin_services::Lifeline::new(), peer_key))
         .unwrap();
 }

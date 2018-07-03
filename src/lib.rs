@@ -22,6 +22,7 @@ mod context;
 mod peer;
 mod protocol;
 pub mod service;
+pub mod builtin_services;
 mod stream;
 pub mod util;
 

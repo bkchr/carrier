@@ -77,7 +77,7 @@ pub fn start_peer(stream_num: u16, bearer_port: u16) {
             .add_remote_peer(bearer_addr)
             .unwrap();
 
-        let builder = carrier::service::register_builtin_services(builder);
+        let builder = carrier::builtin_services::register(builder);
 
         let peer = builder.build().unwrap();
 

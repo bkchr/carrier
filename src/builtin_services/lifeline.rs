@@ -1,4 +1,4 @@
-use super::{Client, Server, Streams};
+use service::{Client, Server, Streams};
 use error::*;
 use {NewStreamHandle, Stream};
 

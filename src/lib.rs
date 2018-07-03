@@ -18,11 +18,12 @@ extern crate tokio_serde_json;
 
 #[macro_use]
 mod error;
+pub mod builtin_services;
 mod context;
 mod peer;
+mod peer_builder;
 mod protocol;
 pub mod service;
-pub mod builtin_services;
 mod stream;
 pub mod util;
 

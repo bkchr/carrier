@@ -1,4 +1,4 @@
-use peer::PeerBuilder;
+use peer_builder::PeerBuilder;
 
 mod lifeline;
 pub use self::lifeline::Lifeline;

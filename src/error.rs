@@ -1,10 +1,11 @@
+use PubKeyHash;
+
 use failure;
 pub use failure::ResultExt;
 
 use hole_punch;
 
-use std::io;
-use std::result;
+use std::{io, result};
 
 use openssl;
 
@@ -20,11 +21,16 @@ pub enum Error {
     OpenSslError(#[cause] openssl::error::ErrorStack),
     #[fail(display = "Error {}", _0)]
     Custom(failure::Error),
+    #[fail(display = "Peer {} not found.", _0)]
+    PeerNotFound(PubKeyHash),
 }
 
 impl From<hole_punch::Error> for Error {
     fn from(err: hole_punch::Error) -> Error {
-        Error::HolePunch(err)
+        match err {
+            hole_punch::Error::PeerNotFound(peer) => Error::PeerNotFound(peer),
+            e @ _ => Error::HolePunch(e)
+        }
     }
 }
 

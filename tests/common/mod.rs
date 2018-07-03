@@ -2,7 +2,7 @@ use carrier::{
     self, service::{Client, Server, Streams}, Error, FileFormat, NewStreamHandle, PubKeyHash,
 };
 
-use std::{net::SocketAddr, result, sync::mpsc::channel, thread};
+use std::{net::SocketAddr, result, sync::mpsc::channel, thread, time::Duration};
 
 use tokio_core::reactor::{Core, Handle};
 
@@ -114,19 +114,38 @@ pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
 
     let mut peer = builder.build().unwrap();
 
-    let data = evt_loop
-        .run(peer.run_service(TestService::new(stream_num, total_stream_num), peer_key))
-        .expect("TestService returns data.");
+    for _ in 0..3 {
+        let res = evt_loop.run(peer.run_service(
+            TestService::new(stream_num, total_stream_num),
+            peer_key.clone(),
+        ));
 
-    assert_eq!(
-        TEST_SERVICE_DATA
-            .iter()
-            .cloned()
-            .cycle()
-            .take(TEST_SERVICE_DATA.len() * total_stream_num)
-            .collect::<Vec<_>>(),
-        data
-    );
+        let data = match res {
+            Ok(data) => data,
+            Err(e) => match e {
+                Error::PeerNotFound(_) => {
+                    // Sleep and retry to connect to the peer afterwards
+                    thread::sleep(Duration::from_secs(5));
+                    continue;
+                }
+                e @ _ => panic!(e),
+            },
+        };
+
+        assert_eq!(
+            TEST_SERVICE_DATA
+                .iter()
+                .cloned()
+                .cycle()
+                .take(TEST_SERVICE_DATA.len() * total_stream_num)
+                .collect::<Vec<_>>(),
+            data
+        );
+
+        return;
+    }
+
+    panic!("Could not find requested peer!");
 }
 
 struct TestService {

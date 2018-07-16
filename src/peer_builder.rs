@@ -41,9 +41,9 @@ impl PeerBuilder {
         self
     }
 
-    /// Set the TLS certificate filename.
-    pub fn set_cert_chain_file<C: Into<PathBuf>>(mut self, path: C) -> PeerBuilder {
-        self.config = self.config.set_cert_chain_filename(path);
+    /// Set the TLS certificate chain filename.
+    pub fn set_certificate_chain_file<C: Into<PathBuf>>(mut self, path: C) -> PeerBuilder {
+        self.config = self.config.set_certificate_chain_filename(path);
         self
     }
 
@@ -52,14 +52,14 @@ impl PeerBuilder {
     pub fn set_private_key_file<K: Into<PathBuf>>(mut self, path: K) -> PeerBuilder {
         let path = path.into();
         self.private_key_file = Some(path.clone());
-        self.config = self.config.set_key_filename(path);
+        self.config = self.config.set_private_key_filename(path);
         self
     }
 
     /// Set the TLS certificate chain for this peer from memory.
     /// This will overwrite any prior call to `set_cert_chain_filename`.
-    pub fn set_cert_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> PeerBuilder {
-        self.config = self.config.set_cert_chain(chain, format);
+    pub fn set_certificate_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> PeerBuilder {
+        self.config = self.config.set_certificate_chain(chain, format);
         self
     }
 
@@ -67,7 +67,7 @@ impl PeerBuilder {
     /// This will overwrite any prior call to `set_private_key_filename`.
     pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> PeerBuilder {
         self.private_key = Some((format, key.clone()));
-        self.config = self.config.set_key(key, format);
+        self.config = self.config.set_private_key(key, format);
         self
     }
 

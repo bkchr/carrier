@@ -30,7 +30,7 @@ fn main() {
     let mut evt_loop = Core::new().unwrap();
 
     let builder = carrier::Peer::builder(evt_loop.handle())
-        .set_cert_chain_file(certificate_path)
+        .set_certificate_chain_file(certificate_path)
         .set_private_key_file(key_path)
         .set_client_ca_cert_files(client_ca_vec)
         .set_server_ca_cert_files(server_ca_vec)

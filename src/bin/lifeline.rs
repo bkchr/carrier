@@ -41,7 +41,7 @@ fn main() {
         .expect("Globbing for server certificate authorities(*.pem).");
 
     let builder = carrier::Peer::builder(evt_loop.handle())
-        .set_cert_chain_file(cert)
+        .set_certificate_chain_file(cert)
         .set_private_key_file(key)
         .set_client_ca_cert_files(client_ca_vec)
         .set_server_ca_cert_files(server_ca_vec)

@@ -31,7 +31,7 @@ pub fn start_bearer() -> u16 {
         let mut evt_loop = Core::new().unwrap();
 
         let server = carrier::Peer::builder(evt_loop.handle())
-            .set_cert_chain(vec![cert.to_vec()], FileFormat::PEM)
+            .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
             .set_private_key(key.to_vec(), FileFormat::PEM)
             .set_client_ca_cert_files(peer_ca_vec)
             .build()
@@ -69,7 +69,7 @@ pub fn start_peer(stream_num: u16, bearer_port: u16) {
         let mut evt_loop = Core::new().unwrap();
 
         let builder = carrier::Peer::builder(evt_loop.handle())
-            .set_cert_chain(vec![cert.to_vec()], FileFormat::PEM)
+            .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
             .set_private_key(key.to_vec(), FileFormat::PEM)
             .set_client_ca_cert_files(peer_ca_vec)
             .set_server_ca_cert_files(bearer_ca_vec)
@@ -107,7 +107,7 @@ pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
     println!("PEER: {}", peer_key);
 
     let builder = carrier::Peer::builder(evt_loop.handle())
-        .set_cert_chain(vec![cert.to_vec()], FileFormat::PEM)
+        .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
         .set_private_key(key.to_vec(), FileFormat::PEM)
         .add_remote_peer(bearer_addr)
         .unwrap();

@@ -25,7 +25,7 @@ fn main() {
 
     let builder = carrier::Peer::builder(evt_loop.handle())
         .set_quic_listen_port(listen_port)
-        .set_cert_chain_file(certificate_path)
+        .set_certificate_chain_file(certificate_path)
         .set_private_key_file(key_path)
         .set_client_ca_cert_files(client_ca_vec);
 

@@ -34,7 +34,7 @@ fn main() {
         .set_private_key_file(key_path)
         .set_client_ca_cert_files(client_ca_vec)
         .set_server_ca_cert_files(server_ca_vec)
-        .add_remote_peer(bearer_addr.clone()).unwrap();
+        .add_remote_peer(bearer_addr.clone());
 
     let builder = carrier::builtin_services::register(builder);
 

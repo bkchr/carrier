@@ -4,7 +4,10 @@ use peer::Peer;
 use service::Server;
 
 use std::{
-    fs::File, io::Read, net::ToSocketAddrs, path::{Path, PathBuf},
+    fs::File,
+    io::Read,
+    net::ToSocketAddrs,
+    path::{Path, PathBuf},
 };
 
 use hole_punch::{Config, ConfigBuilder, Context, FileFormat, PubKeyHash};
@@ -22,7 +25,7 @@ pub struct PeerBuilder {
 }
 
 impl PeerBuilder {
-    pub(crate) fn new(handle: Handle) -> PeerBuilder {
+    pub(crate) fn new(handle: Handle) -> Self {
         let config = Config::builder();
         let peer_context = PeerContext::new(handle.clone());
 
@@ -36,20 +39,20 @@ impl PeerBuilder {
     }
 
     /// Set Quic listen port.
-    pub fn set_quic_listen_port(mut self, port: u16) -> PeerBuilder {
+    pub fn set_quic_listen_port(mut self, port: u16) -> Self {
         self.config = self.config.set_quic_listen_port(port);
         self
     }
 
     /// Set the TLS certificate chain filename.
-    pub fn set_certificate_chain_file<C: Into<PathBuf>>(mut self, path: C) -> PeerBuilder {
+    pub fn set_certificate_chain_file<C: Into<PathBuf>>(mut self, path: C) -> Self {
         self.config = self.config.set_certificate_chain_filename(path);
         self
     }
 
     /// Set the TLS private key filename.
     /// The key needs to be in `PEM` format.
-    pub fn set_private_key_file<K: Into<PathBuf>>(mut self, path: K) -> PeerBuilder {
+    pub fn set_private_key_file<K: Into<PathBuf>>(mut self, path: K) -> Self {
         let path = path.into();
         self.private_key_file = Some(path.clone());
         self.config = self.config.set_private_key_filename(path);
@@ -58,21 +61,21 @@ impl PeerBuilder {
 
     /// Set the TLS certificate chain for this peer from memory.
     /// This will overwrite any prior call to `set_cert_chain_filename`.
-    pub fn set_certificate_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> PeerBuilder {
+    pub fn set_certificate_chain(mut self, chain: Vec<Vec<u8>>, format: FileFormat) -> Self {
         self.config = self.config.set_certificate_chain(chain, format);
         self
     }
 
     /// Set the TLS private key for this peer from memory.
     /// This will overwrite any prior call to `set_private_key_filename`.
-    pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> PeerBuilder {
+    pub fn set_private_key(mut self, key: Vec<u8>, format: FileFormat) -> Self {
         self.private_key = Some((format, key.clone()));
         self.config = self.config.set_private_key(key, format);
         self
     }
 
     /// Register the given service at this peer.
-    pub fn register_service<S: Server + 'static>(mut self, service: S) -> PeerBuilder {
+    pub fn register_service<S: Server + 'static>(mut self, service: S) -> Self {
         self.peer_context.register_service(service);
         self
     }
@@ -80,7 +83,7 @@ impl PeerBuilder {
     /// Set the incoming CA certificate files.
     /// These CAs will be used to authenticate incoming connections.
     /// When these CAs are not given, all incoming connections will be authenticated successfully.
-    pub fn set_client_ca_cert_files(mut self, files: Vec<PathBuf>) -> PeerBuilder {
+    pub fn set_client_ca_cert_files(mut self, files: Vec<PathBuf>) -> Self {
         self.config = self.config.set_incoming_ca_certificates(files);
         self
     }
@@ -88,7 +91,7 @@ impl PeerBuilder {
     /// Set the outgoing CA certificate files.
     /// These CAs will be used to authenticate outgoing connections.
     /// When these CAs are not given, all outgoing connections will be trusted.
-    pub fn set_server_ca_cert_files(mut self, files: Vec<PathBuf>) -> PeerBuilder {
+    pub fn set_server_ca_cert_files(mut self, files: Vec<PathBuf>) -> Self {
         self.config = self.config.set_outgoing_ca_certificates(files);
         self
     }
@@ -97,9 +100,9 @@ impl PeerBuilder {
     /// The peer will hold a connection to one of the given remote peers. If one connection is
     /// closed, a new connection to the next remote peer is created. This ensures that the local
     /// peer is reachable by other peers.
-    pub fn add_remote_peer<T: ToSocketAddrs>(mut self, peer: T) -> Result<Self> {
-        self.config = self.config.add_remote_peer(peer)?;
-        Ok(self)
+    pub fn add_remote_peer<T: ToSocketAddrs + 'static>(mut self, peer: T) -> Self {
+        self.config = self.config.add_remote_peer(peer);
+        self
     }
 
     /// Builds the `Peer` instance.

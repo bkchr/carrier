@@ -1,5 +1,7 @@
 use carrier::{
-    self, service::{Client, Server, Streams}, Error, FileFormat, NewStreamHandle, PubKeyHash,
+    self,
+    service::{Client, Server, Streams},
+    Error, FileFormat, NewStreamHandle, PubKeyHash,
 };
 
 use std::{net::SocketAddr, result, sync::mpsc::channel, thread, time::Duration};
@@ -74,8 +76,7 @@ pub fn start_peer(stream_num: u16, bearer_port: u16) {
             .set_client_ca_cert_files(peer_ca_vec)
             .set_server_ca_cert_files(bearer_ca_vec)
             .register_service(TestService::new(stream_num, 0))
-            .add_remote_peer(bearer_addr)
-            .unwrap();
+            .add_remote_peer(bearer_addr);
 
         let builder = carrier::builtin_services::register(builder);
 
@@ -109,8 +110,7 @@ pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
     let builder = carrier::Peer::builder(evt_loop.handle())
         .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
         .set_private_key(key.to_vec(), FileFormat::PEM)
-        .add_remote_peer(bearer_addr)
-        .unwrap();
+        .add_remote_peer(bearer_addr);
 
     let mut peer = builder.build().unwrap();
 

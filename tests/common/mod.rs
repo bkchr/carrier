@@ -25,7 +25,7 @@ pub fn start_bearer() -> u16 {
         let cert = include_bytes!("../../test_certs/bearer.cert.pem");
         let key = include_bytes!("../../test_certs/bearer.key.pem");
 
-        let peer_ca_vec = carrier::util::glob_for_certificates(format!(
+        let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
             "{}/test_certs/trusted_peer_cas",
             env!("CARGO_MANIFEST_DIR")
         )).expect("Globbing for client certificate authorities(*.pem).");
@@ -58,12 +58,12 @@ pub fn start_peer(stream_num: u16, bearer_port: u16) {
         let cert = include_bytes!("../../test_certs/peer.cert.pem");
         let key = include_bytes!("../../test_certs/peer.key.pem");
 
-        let peer_ca_vec = carrier::util::glob_for_certificates(format!(
+        let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
             "{}/test_certs/trusted_peer_cas",
             env!("CARGO_MANIFEST_DIR")
         )).expect("Globbing for peer certificate authorities(*.pem).");
 
-        let bearer_ca_vec = carrier::util::glob_for_certificates(format!(
+        let bearer_ca_vec = carrier::util::glob_for_certificates(&format!(
             "{}/test_certs/trusted_cas",
             env!("CARGO_MANIFEST_DIR")
         )).expect("Globbing for bearer certificate authorities(*.pem).");

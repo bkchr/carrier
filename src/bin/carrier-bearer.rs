@@ -18,7 +18,7 @@ fn main() {
         "Please give path to client certificate authorities(*.pem) via `CARRIER_CLIENT_CA_PATH`",
     );
 
-    let client_ca_vec = carrier::util::glob_for_certificates(client_ca_path)
+    let client_ca_vec = carrier::util::glob_for_certificates(&client_ca_path)
         .expect("Globbing for client certificate authorities(*.pem).");
 
     let mut evt_loop = Core::new().unwrap();

@@ -34,10 +34,10 @@ fn main() {
         .nth(6)
         .expect("Please give path to server certificate authorities(*.pem)");
 
-    let client_ca_vec = carrier::util::glob_for_certificates(client_ca_path)
+    let client_ca_vec = carrier::util::glob_for_certificates(&client_ca_path)
         .expect("Globbing for client certificate authorities(*.pem).");
 
-    let server_ca_vec = carrier::util::glob_for_certificates(server_ca_path)
+    let server_ca_vec = carrier::util::glob_for_certificates(&server_ca_path)
         .expect("Globbing for server certificate authorities(*.pem).");
 
     let mut peer = carrier::Peer::builder(evt_loop.handle())

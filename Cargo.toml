@@ -6,7 +6,7 @@ authors = ["Bastian Köcher <git@kchr.de>"]
 [dependencies]
 serde = "1.0"
 serde_derive = "1.0"
-hole_punch = { git = "https://github.com/bkchr/hole_punch", branch="rewrite" }
+hole_punch = { git = "https://github.com/bkchr/hole_punch", branch="master" }
 tokio-serde-json = { git = "https://github.com/carllerche/tokio-serde-json.git" }
 futures = "0.1"
 failure = "0.1"
@@ -17,3 +17,4 @@ bytes = "0.4"
 lazy_static = "1.0"
 glob = "0.2"
 openssl = "^0.10.6"
+structopt = "0.2"

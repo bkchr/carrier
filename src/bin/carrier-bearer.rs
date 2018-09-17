@@ -1,4 +1,6 @@
 extern crate carrier;
+#[allow(unused)]
+#[macro_use]
 extern crate structopt;
 extern crate tokio_core;
 

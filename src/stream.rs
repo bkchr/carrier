@@ -2,11 +2,12 @@ use error::*;
 use protocol::Protocol;
 use service::ServiceId;
 
-use hole_punch;
+use hole_punch::{self, SendFuture};
 
 use futures::{Future, Poll, Sink, StartSend, Stream as FStream};
 
-use tokio_io::{codec::length_delimited, AsyncRead, AsyncWrite};
+use tokio::codec::{Framed, LengthDelimitedCodec};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use tokio_serde_json::{ReadJson, WriteJson};
 
@@ -74,7 +75,8 @@ impl AsyncWrite for Stream {
     }
 }
 
-pub type ProtocolStream = WriteJson<ReadJson<length_delimited::Framed<Stream>, Protocol>, Protocol>;
+pub type ProtocolStream =
+    WriteJson<ReadJson<Framed<Stream, LengthDelimitedCodec>, Protocol>, Protocol>;
 
 impl Into<Stream> for ProtocolStream {
     fn into(self) -> Stream {
@@ -83,7 +85,10 @@ impl Into<Stream> for ProtocolStream {
 }
 
 pub fn protocol_stream_create(stream: hole_punch::Stream) -> ProtocolStream {
-    WriteJson::new(ReadJson::new(length_delimited::Framed::new(stream.into())))
+    WriteJson::new(ReadJson::new(Framed::new(
+        stream.into(),
+        LengthDelimitedCodec::new(),
+    )))
 }
 
 #[derive(Clone)]
@@ -102,7 +107,7 @@ impl NewStreamHandle {
         }
     }
 
-    pub fn new_stream(&mut self) -> impl Future<Item = Stream, Error = Error> {
+    pub fn new_stream(&mut self) -> impl SendFuture<Item = Stream, Error = Error> {
         let service_id = self.service_id;
         self.new_stream_handle
             .new_stream()

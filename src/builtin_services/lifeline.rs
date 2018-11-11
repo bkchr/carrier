@@ -1,25 +1,21 @@
-use service::{Client, Server, Streams};
 use error::*;
+use service::{Client, Server, Streams};
 use {NewStreamHandle, Stream};
 
-use tokio_core::net::TcpStream;
-use tokio_core::reactor::Handle;
+use tokio::net::TcpStream;
 
-use tokio_io::io;
-use tokio_io::AsyncRead;
+use tokio::{
+    self,
+    io::{self, AsyncRead},
+};
 
 use tokio_file_unix;
 
 use futures::{stream, Future, Poll, Sink, Stream as FStream};
 
-use std;
 use std::io::Write;
 
-use bytes::BytesMut;
-
-lazy_static! {
-    static ref LIFELINE_STDIN: std::io::Stdin = std::io::stdin();
-}
+use bytes::Bytes;
 
 pub struct Lifeline {}
 
@@ -30,17 +26,14 @@ impl Lifeline {
 }
 
 impl Server for Lifeline {
-    fn start(&mut self, handle: &Handle, streams: Streams, _: NewStreamHandle) {
-        let inner_handle = handle.clone();
-        handle.spawn(
+    fn start(&mut self, streams: Streams, _: NewStreamHandle) {
+        tokio::spawn(
             streams
                 .into_future()
                 .map_err(|e| e.0)
                 .and_then(move |(stream, _)| match stream {
-                    Some(stream) => Ok(TcpStream::connect(
-                        &([127, 0, 0, 1], 22).into(),
-                        &inner_handle,
-                    ).map_err(|e| e.into())
+                    Some(stream) => Ok(TcpStream::connect(&([127, 0, 0, 1], 22).into())
+                        .map_err(|e| e.into())
                         .and_then(move |tcp| {
                             let (read, write) = AsyncRead::split(stream);
                             let (read2, write2) = tcp.split();
@@ -88,7 +81,7 @@ impl<R: AsyncRead> Future for StdinReader<R> {
             let len = try_nb!(self.stdin.read(&mut self.buf));
 
             if len > 0 {
-                self.sink.start_send(BytesMut::from(&self.buf[..len]))?;
+                self.sink.start_send(Bytes::from(&self.buf[..len]))?;
                 self.sink.poll_complete()?;
             }
         }
@@ -96,15 +89,14 @@ impl<R: AsyncRead> Future for StdinReader<R> {
 }
 
 pub struct LifelineClientFuture {
-    future: Box<Future<Item = (), Error = Error>>,
+    future: Box<Future<Item = (), Error = Error> + Send>,
 }
 
 impl LifelineClientFuture {
-    fn new(handle: &Handle, streams: Streams) -> Result<LifelineClientFuture> {
-        let lock = LIFELINE_STDIN.lock();
-        let stdin = tokio_file_unix::StdFile(lock);
+    fn new(streams: Streams) -> Result<LifelineClientFuture> {
+        let stdin = tokio_file_unix::raw_stdin()?;
         let stdin = tokio_file_unix::File::new_nb(stdin)?;
-        let stdin = stdin.into_reader(&handle)?;
+        let stdin = stdin.into_reader(&tokio::reactor::Handle::current())?;
 
         let future = Box::new(
             streams
@@ -146,8 +138,8 @@ impl Client for Lifeline {
     type Error = Error;
     type Future = LifelineClientFuture;
 
-    fn start(self, handle: &Handle, streams: Streams, _: NewStreamHandle) -> Result<Self::Future> {
-        LifelineClientFuture::new(handle, streams)
+    fn start(self, streams: Streams, _: NewStreamHandle) -> Result<Self::Future> {
+        LifelineClientFuture::new(streams)
     }
 
     fn name(&self) -> &'static str {

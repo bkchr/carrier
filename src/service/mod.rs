@@ -8,8 +8,6 @@ be running over `Carrier`.
 */
 use NewStreamHandle;
 
-use tokio_core::reactor::Handle;
-
 use futures::Future;
 
 use std::result;
@@ -21,26 +19,24 @@ pub use self::streams::Streams;
 pub type ServiceId = u64;
 
 /// Server side of a service.
-pub trait Server {
+pub trait Server: Send {
     /// Start a new server instance of the service.
-    fn start(&mut self, handle: &Handle, streams: Streams, new_stream_handle: NewStreamHandle);
+    fn start(&mut self, streams: Streams, new_stream_handle: NewStreamHandle);
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }
 
 /// Client side of a service.
-pub trait Client {
-    type Error;
-    type Future: Future<Error=Self::Error>;
+pub trait Client: Send {
+    type Error: Send;
+    type Future: Future<Error = Self::Error> + Send;
     /// Starts a new client instance.
     /// The returned `Future` should resolve, when the service is finished.
     fn start(
         self,
-        handle: &Handle,
         streams: Streams,
         new_stream_handle: NewStreamHandle,
     ) -> result::Result<Self::Future, Self::Error>;
     /// Returns the unique name of the service. The name will be used to identify this service.
     fn name(&self) -> &'static str;
 }
-

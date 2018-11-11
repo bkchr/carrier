@@ -2,16 +2,21 @@ use protocol::Protocol;
 use service::{Client, Server, ServiceId, Streams};
 use stream::{NewStreamHandle, ProtocolStream, Stream};
 
-use std::{cell::RefCell, collections::HashMap, rc::Rc, result};
+use std::{
+    collections::HashMap,
+    result,
+    sync::{Arc, Mutex},
+};
 
-use tokio_core::reactor::Handle;
+use tokio::runtime::TaskExecutor;
 
 use futures::{
-    sync::mpsc::{channel, Receiver, Sender, UnboundedSender}, Sink, Stream as FStream,
+    sync::mpsc::{channel, Receiver, Sender, UnboundedSender},
+    Sink, Stream as FStream,
 };
 
 struct Inner {
-    services: HashMap<String, Box<Server>>,
+    services: HashMap<String, Box<Server + Send>>,
     service_instances: HashMap<ServiceId, UnboundedSender<Stream>>,
     next_service_id: ServiceId,
     service_instance_dropped_sender: Sender<ServiceId>,
@@ -70,7 +75,6 @@ impl Inner {
         name: &str,
         remote_service_id: ServiceId,
         mut stream: ProtocolStream,
-        handle: &Handle,
     ) {
         if self.services.contains_key(name) {
             let id = self.next_service_id();
@@ -82,7 +86,7 @@ impl Inner {
             self.services
                 .get_mut(name)
                 .unwrap()
-                .start(handle, streams, new_stream_handle);
+                .start(streams, new_stream_handle);
         } else {
             send_protocol_message(&mut stream, Protocol::ServiceNotFound);
         }
@@ -94,7 +98,6 @@ impl Inner {
         local_service_id: ServiceId,
         remote_service_id: ServiceId,
         stream: Stream,
-        handle: &Handle,
     ) -> result::Result<C::Future, C::Error>
     where
         C: Client,
@@ -102,7 +105,7 @@ impl Inner {
         let (new_stream_handle, streams) =
             self.create_new_stream_handle_and_streams(stream, local_service_id, remote_service_id);
 
-        service.start(handle, streams, new_stream_handle)
+        service.start(streams, new_stream_handle)
     }
 
     fn connect_stream_to_service_instance(
@@ -132,7 +135,7 @@ fn send_protocol_message(stream: &mut ProtocolStream, msg: Protocol) {
 fn spawn_service_dropped(
     mut context: PeerContext,
     service_dropped: Receiver<ServiceId>,
-    handle: Handle,
+    handle: TaskExecutor,
 ) {
     handle.spawn(service_dropped.for_each(move |id| {
         context.service_instance_dropped(id);
@@ -144,15 +147,15 @@ fn spawn_service_dropped(
 /// It stores all registered services and service instances.
 #[derive(Clone)]
 pub struct PeerContext {
-    inner: Rc<RefCell<Inner>>,
+    inner: Arc<Mutex<Inner>>,
 }
 
 impl PeerContext {
-    pub fn new(handle: Handle) -> PeerContext {
+    pub fn new(handle: TaskExecutor) -> PeerContext {
         let (inner, service_dropped) = Inner::new();
 
         let context = PeerContext {
-            inner: Rc::new(RefCell::new(inner)),
+            inner: Arc::new(Mutex::new(inner)),
         };
 
         spawn_service_dropped(context.clone(), service_dropped, handle);
@@ -161,11 +164,14 @@ impl PeerContext {
     }
 
     pub fn register_service<S: Server + 'static>(&mut self, service: S) {
-        self.inner.borrow_mut().register_service(service);
+        self.inner.lock().unwrap().register_service(service);
     }
 
     fn service_instance_dropped(&mut self, service_id: ServiceId) {
-        self.inner.borrow_mut().service_instance_dropped(service_id);
+        self.inner
+            .lock()
+            .unwrap()
+            .service_instance_dropped(service_id);
     }
 
     pub fn start_server_service_instance(
@@ -173,14 +179,11 @@ impl PeerContext {
         name: &str,
         remote_service_id: ServiceId,
         stream: ProtocolStream,
-        handle: &Handle,
     ) {
-        self.inner.borrow_mut().start_server_service_instance(
-            name,
-            remote_service_id,
-            stream,
-            handle,
-        );
+        self.inner
+            .lock()
+            .unwrap()
+            .start_server_service_instance(name, remote_service_id, stream);
     }
 
     pub fn start_client_service_instance<C>(
@@ -189,22 +192,20 @@ impl PeerContext {
         local_service_id: ServiceId,
         remote_service_id: ServiceId,
         stream: Stream,
-        handle: &Handle,
     ) -> result::Result<C::Future, C::Error>
     where
         C: Client,
     {
-        self.inner.borrow_mut().start_client_service_instance(
+        self.inner.lock().unwrap().start_client_service_instance(
             service,
             local_service_id,
             remote_service_id,
             stream,
-            handle,
         )
     }
 
     pub fn next_service_id(&mut self) -> ServiceId {
-        self.inner.borrow_mut().next_service_id()
+        self.inner.lock().unwrap().next_service_id()
     }
 
     pub fn connect_stream_to_service_instance(
@@ -213,7 +214,8 @@ impl PeerContext {
         service_id: ServiceId,
     ) {
         self.inner
-            .borrow_mut()
+            .lock()
+            .unwrap()
             .connect_stream_to_service_instance(stream, service_id);
     }
 }

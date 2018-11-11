@@ -1,15 +1,15 @@
 extern crate carrier;
 extern crate hole_punch;
-extern crate tokio_core;
+extern crate tokio;
 
 use carrier::builtin_services;
 
-use tokio_core::reactor::Core;
+use tokio::runtime::Runtime;
 
 use std::env::args;
 
 fn main() {
-    let mut evt_loop = Core::new().unwrap();
+    let mut evt_loop = Runtime::new().unwrap();
 
     let peer_key = args().nth(1).expect(
         "Please give the public key(sha256 hash as hex) of the peer you want to connect to.",
@@ -40,7 +40,7 @@ fn main() {
     let server_ca_vec = carrier::util::glob_for_certificates(&server_ca_path)
         .expect("Globbing for server certificate authorities(*.pem).");
 
-    let mut peer = carrier::Peer::builder(evt_loop.handle())
+    let mut peer = carrier::Peer::builder(evt_loop.executor())
         .set_certificate_chain_file(cert)
         .set_private_key_file(key)
         .set_client_ca_cert_files(client_ca_vec)
@@ -50,6 +50,6 @@ fn main() {
         .unwrap();
 
     evt_loop
-        .run(peer.run_service(builtin_services::Lifeline::new(), peer_key))
+        .block_on_all(peer.run_service(builtin_services::Lifeline::new(), peer_key))
         .unwrap();
 }

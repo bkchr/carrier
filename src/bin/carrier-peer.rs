@@ -1,7 +1,7 @@
 extern crate carrier;
-extern crate tokio_core;
+extern crate tokio;
 
-use tokio_core::reactor::Core;
+use tokio::runtime::Runtime;
 
 use std::env::var;
 
@@ -27,9 +27,9 @@ fn main() {
     let server_ca_vec = carrier::util::glob_for_certificates(&bearer_ca_path)
         .expect("Globbing for server certificate authorities(*.pem).");
 
-    let mut evt_loop = Core::new().unwrap();
+    let evt_loop = Runtime::new().unwrap();
 
-    let builder = carrier::Peer::builder(evt_loop.handle())
+    let builder = carrier::Peer::builder(evt_loop.executor())
         .set_certificate_chain_file(certificate_path)
         .set_private_key_file(key_path)
         .set_client_ca_cert_files(client_ca_vec)
@@ -42,5 +42,5 @@ fn main() {
     let peer = builder.build().unwrap();
 
     println!("Peer running");
-    peer.run(&mut evt_loop).unwrap();
+    evt_loop.block_on_all(peer).unwrap();
 }

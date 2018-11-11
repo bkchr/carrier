@@ -29,7 +29,7 @@ impl From<hole_punch::Error> for Error {
     fn from(err: hole_punch::Error) -> Error {
         match err {
             hole_punch::Error::PeerNotFound(peer) => Error::PeerNotFound(peer),
-            e @ _ => Error::HolePunch(e)
+            e @ _ => Error::HolePunch(e),
         }
     }
 }

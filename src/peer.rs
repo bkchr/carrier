@@ -7,13 +7,15 @@ use stream::{protocol_stream_create, ProtocolStream};
 
 use std::net::SocketAddr;
 
-use hole_punch::{Context, CreateConnectionToPeerHandle, PubKeyHash};
+use hole_punch::{Context, CreateConnectionToPeerHandle, PubKeyHash, SendFuture};
 
 use futures::{
-    sync::oneshot, Async::{NotReady, Ready}, Future, Poll, Sink, Stream as FStream,
+    sync::oneshot,
+    Async::{NotReady, Ready},
+    Future, Poll, Sink, Stream as FStream,
 };
 
-use tokio_core::reactor::{Core, Handle};
+use tokio::{self, runtime::TaskExecutor};
 
 /// Spawn the hole punch `Context`.
 /// All incoming `Stream`s will be wrapped by the "incoming_stream_future" that processes the
@@ -21,20 +23,19 @@ use tokio_core::reactor::{Core, Handle};
 fn spawn_hole_punch_context(
     context: Context,
     peer_context: PeerContext,
-    handle: &Handle,
+    handle: TaskExecutor,
 ) -> oneshot::Receiver<Result<()>> {
     let (sender, recv) = oneshot::channel();
 
-    let inner_handle = handle.clone();
     handle.spawn(
         context
             .for_each(move |stream| {
-                inner_handle.spawn(
+                tokio::spawn(
                     build_incoming_stream_future(
                         protocol_stream_create(stream),
                         peer_context.clone(),
-                        inner_handle.clone(),
-                    ).map_err(|e| println!("IncomingStream error: {:?}", e)),
+                    )
+                    .map_err(|e| println!("IncomingStream error: {:?}", e)),
                 );
                 Ok(())
             })
@@ -50,7 +51,6 @@ fn spawn_hole_punch_context(
 /// The `Peer` is the running instance.
 /// It handles all registered services and is also responsible for spawning new service instances.
 pub struct Peer {
-    handle: Handle,
     peer_context: PeerContext,
     context_result: oneshot::Receiver<Result<()>>,
     create_connection_to_peer_handle: CreateConnectionToPeerHandle,
@@ -58,14 +58,13 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub(crate) fn new(handle: Handle, context: Context, peer_context: PeerContext) -> Peer {
+    pub(crate) fn new(handle: TaskExecutor, context: Context, peer_context: PeerContext) -> Peer {
         let create_connection_to_peer_handle = context.create_connection_to_peer_handle();
 
         let quic_local_addr = context.quic_local_addr();
-        let context_result = spawn_hole_punch_context(context, peer_context.clone(), &handle);
+        let context_result = spawn_hole_punch_context(context, peer_context.clone(), handle);
 
         Peer {
-            handle,
             peer_context,
             context_result,
             create_connection_to_peer_handle,
@@ -74,13 +73,8 @@ impl Peer {
     }
 
     /// Create a `PeerBuilder` for building a `Peer` instance.
-    pub fn builder(handle: Handle) -> PeerBuilder {
+    pub fn builder(handle: TaskExecutor) -> PeerBuilder {
         PeerBuilder::new(handle)
-    }
-
-    /// Run this `Peer`.
-    pub fn run(self, evt_loop: &mut Core) -> Result<()> {
-        evt_loop.run(self)
     }
 
     /// Connect to the given `Peer` and run the given `Service` (locally and remotely).
@@ -88,13 +82,12 @@ impl Peer {
         &mut self,
         service: S,
         peer: PubKeyHash,
-    ) -> impl Future<Item = <S::Future as Future>::Item, Error = S::Error>
+    ) -> impl SendFuture<Item = <S::Future as Future>::Item, Error = S::Error>
     where
         S::Error: From<Error>,
     {
         let name = service.name();
         let local_service_id = self.peer_context.next_service_id();
-        let handle = self.handle.clone();
         let mut peer_context = self.peer_context.clone();
 
         self.create_connection_to_peer_handle
@@ -123,7 +116,6 @@ impl Peer {
                     local_service_id,
                     id,
                     stream.into(),
-                    &handle,
                 )
             })
             .flatten()
@@ -151,8 +143,7 @@ impl Future for Peer {
 fn build_incoming_stream_future(
     stream: ProtocolStream,
     mut context: PeerContext,
-    handle: Handle,
-) -> impl Future<Item = (), Error = Error> {
+) -> impl SendFuture<Item = (), Error = Error> {
     stream
         .into_future()
         .map_err(|e| e.0.into())
@@ -163,7 +154,7 @@ fn build_incoming_stream_future(
                 Ok(())
             }
             Some(Protocol::RequestServiceStart { name, local_id }) => {
-                context.start_server_service_instance(&name, local_id, stream.into(), &handle);
+                context.start_server_service_instance(&name, local_id, stream.into());
                 Ok(())
             }
             _ => bail!("Unexpected message at incoming Stream."),

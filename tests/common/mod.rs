@@ -1,12 +1,12 @@
 use carrier::{
     self,
     service::{Client, Server, Streams},
-    Error, FileFormat, NewStreamHandle, PubKeyHash,
+    Error, FileFormat, NewStreamHandle, PubKeyHash, SendFuture,
 };
 
 use std::{net::SocketAddr, result, sync::mpsc::channel, thread, time::Duration};
 
-use tokio_core::reactor::{Core, Handle};
+use tokio::runtime::Runtime;
 
 use futures::{
     future, stream::futures_unordered, sync::mpsc::unbounded, Future, Sink, Stream as FStream,
@@ -28,11 +28,12 @@ pub fn start_bearer() -> u16 {
         let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
             "{}/test_certs/trusted_peer_cas",
             env!("CARGO_MANIFEST_DIR")
-        )).expect("Globbing for client certificate authorities(*.pem).");
+        ))
+        .expect("Globbing for client certificate authorities(*.pem).");
 
-        let mut evt_loop = Core::new().unwrap();
+        let evt_loop = Runtime::new().unwrap();
 
-        let server = carrier::Peer::builder(evt_loop.handle())
+        let server = carrier::Peer::builder(evt_loop.executor())
             .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
             .set_private_key(key.to_vec(), FileFormat::PEM)
             .set_client_ca_cert_files(peer_ca_vec)
@@ -40,7 +41,7 @@ pub fn start_bearer() -> u16 {
             .unwrap();
 
         send.send(server.quic_local_addr()).unwrap();
-        server.run(&mut evt_loop).unwrap();
+        evt_loop.block_on_all(server).unwrap();
     });
 
     recv.recv().expect("Waiting for bearer to start").port()
@@ -61,16 +62,18 @@ pub fn start_peer(stream_num: u16, bearer_port: u16) {
         let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
             "{}/test_certs/trusted_peer_cas",
             env!("CARGO_MANIFEST_DIR")
-        )).expect("Globbing for peer certificate authorities(*.pem).");
+        ))
+        .expect("Globbing for peer certificate authorities(*.pem).");
 
         let bearer_ca_vec = carrier::util::glob_for_certificates(&format!(
             "{}/test_certs/trusted_cas",
             env!("CARGO_MANIFEST_DIR")
-        )).expect("Globbing for bearer certificate authorities(*.pem).");
+        ))
+        .expect("Globbing for bearer certificate authorities(*.pem).");
 
-        let mut evt_loop = Core::new().unwrap();
+        let evt_loop = Runtime::new().unwrap();
 
-        let builder = carrier::Peer::builder(evt_loop.handle())
+        let builder = carrier::Peer::builder(evt_loop.executor())
             .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
             .set_private_key(key.to_vec(), FileFormat::PEM)
             .set_client_ca_cert_files(peer_ca_vec)
@@ -83,7 +86,7 @@ pub fn start_peer(stream_num: u16, bearer_port: u16) {
         let peer = builder.build().unwrap();
 
         send.send(()).unwrap();
-        peer.run(&mut evt_loop).unwrap();
+        evt_loop.block_on_all(peer).unwrap();
     });
 
     recv.recv().expect("Waiting for peer to start");
@@ -95,7 +98,7 @@ pub fn start_peer(stream_num: u16, bearer_port: u16) {
 /// bearer_port - The port of the bearer.
 pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
     let total_stream_num = (stream_num + remote_stream_num - 1) as usize;
-    let mut evt_loop = Core::new().unwrap();
+    let mut evt_loop = Runtime::new().unwrap();
 
     let bearer_addr: SocketAddr = ([127, 0, 0, 1], bearer_port).into();
 
@@ -107,7 +110,7 @@ pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
         PubKeyHash::from_x509_pem(peer_cert, false).expect("Create peer key from peer cert.");
     println!("PEER: {}", peer_key);
 
-    let builder = carrier::Peer::builder(evt_loop.handle())
+    let builder = carrier::Peer::builder(evt_loop.executor())
         .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
         .set_private_key(key.to_vec(), FileFormat::PEM)
         .add_remote_peer(bearer_addr);
@@ -115,7 +118,7 @@ pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
     let mut peer = builder.build().unwrap();
 
     for _ in 0..3 {
-        let res = evt_loop.run(peer.run_service(
+        let res = evt_loop.block_on(peer.run_service(
             TestService::new(stream_num, total_stream_num),
             peer_key.clone(),
         ));
@@ -163,10 +166,10 @@ impl TestService {
 }
 
 impl Server for TestService {
-    fn start(&mut self, handle: &Handle, streams: Streams, mut new_stream_handle: NewStreamHandle) {
+    fn start(&mut self, streams: Streams, mut new_stream_handle: NewStreamHandle) {
         let new_streams = (1..self.stream_num).map(|_| new_stream_handle.new_stream());
 
-        handle.spawn(
+        tokio::spawn(
             streams
                 .select(futures_unordered(new_streams))
                 .for_each(|mut stream| {
@@ -185,11 +188,10 @@ impl Server for TestService {
 
 impl Client for TestService {
     type Error = Error;
-    type Future = Box<Future<Item = Vec<u8>, Error = Self::Error>>;
+    type Future = Box<SendFuture<Item = Vec<u8>, Error = Self::Error>>;
 
     fn start(
         self,
-        handle: &Handle,
         streams: Streams,
         mut new_stream_handle: NewStreamHandle,
     ) -> Result<Self::Future> {
@@ -197,14 +199,13 @@ impl Client for TestService {
 
         let new_streams = (1..self.stream_num).map(|_| new_stream_handle.new_stream());
 
-        let inner_handle = handle.clone();
-        handle.spawn(
+        tokio::spawn(
             streams
                 .select(futures_unordered(new_streams))
                 .take(self.total_stream_num as u64)
                 .for_each(move |stream| {
                     let send = send.clone();
-                    inner_handle.spawn(stream.into_future().map_err(|_| ()).and_then(
+                    tokio::spawn(stream.into_future().map_err(|_| ()).and_then(
                         move |(data, _)| {
                             let _ = send.unbounded_send(data.unwrap());
                             Ok(())
@@ -219,7 +220,8 @@ impl Client for TestService {
             recv.fold(Vec::new(), |mut res, data| {
                 res.extend(data);
                 future::ok::<_, ()>(res)
-            }).map_err(|_| Error::from("unknown")),
+            })
+            .map_err(|_| Error::from("unknown")),
         ))
     }
 

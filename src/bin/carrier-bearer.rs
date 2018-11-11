@@ -2,9 +2,9 @@ extern crate carrier;
 #[allow(unused)]
 #[macro_use]
 extern crate structopt;
-extern crate tokio_core;
+extern crate tokio;
 
-use tokio_core::reactor::Core;
+use tokio::runtime::Runtime;
 
 use std::path::PathBuf;
 
@@ -34,9 +34,9 @@ fn main() {
         carrier::util::glob_for_certificates(&options.incoming_con_ca_path.display())
             .expect("Globbing for incoming connection certificate authorities(*.pem).");
 
-    let mut evt_loop = Core::new().unwrap();
+    let evt_loop = Runtime::new().unwrap();
 
-    let builder = carrier::Peer::builder(evt_loop.handle())
+    let builder = carrier::Peer::builder(evt_loop.executor())
         .set_quic_listen_port(options.listen_port)
         .set_certificate_chain_file(options.certificate)
         .set_private_key_file(options.private_key)
@@ -47,5 +47,5 @@ fn main() {
     println!("Bearer running (Port: {})", options.listen_port);
     let bearer = builder.build().unwrap();
 
-    bearer.run(&mut evt_loop).unwrap();
+    evt_loop.block_on_all(bearer).unwrap();
 }

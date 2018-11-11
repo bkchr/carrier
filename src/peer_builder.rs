@@ -14,18 +14,18 @@ use hole_punch::{Config, ConfigBuilder, Context, FileFormat, PubKeyHash};
 
 use openssl::pkey::{PKey, Private};
 
-use tokio_core::reactor::Handle;
+use tokio::runtime::TaskExecutor;
 
 pub struct PeerBuilder {
     config: ConfigBuilder,
-    handle: Handle,
+    handle: TaskExecutor,
     peer_context: PeerContext,
     private_key: Option<(FileFormat, Vec<u8>)>,
     private_key_file: Option<PathBuf>,
 }
 
 impl PeerBuilder {
-    pub(crate) fn new(handle: Handle) -> Self {
+    pub(crate) fn new(handle: TaskExecutor) -> Self {
         let config = Config::builder();
         let peer_context = PeerContext::new(handle.clone());
 
@@ -100,7 +100,7 @@ impl PeerBuilder {
     /// The peer will hold a connection to one of the given remote peers. If one connection is
     /// closed, a new connection to the next remote peer is created. This ensures that the local
     /// peer is reachable by other peers.
-    pub fn add_remote_peer<T: ToSocketAddrs + 'static>(mut self, peer: T) -> Self {
+    pub fn add_remote_peer<T: ToSocketAddrs + 'static + Send>(mut self, peer: T) -> Self {
         self.config = self.config.add_remote_peer(peer);
         self
     }
@@ -113,7 +113,7 @@ impl PeerBuilder {
             self.handle.clone(),
             self.config.build()?,
         )?;
-        Ok(Peer::new(self.handle, context, self.peer_context))
+        Ok(Peer::new(self.handle.clone(), context, self.peer_context))
     }
 
     fn load_private_key(&self) -> Result<PKey<Private>> {

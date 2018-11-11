@@ -4,16 +4,14 @@ extern crate failure;
 extern crate futures;
 extern crate glob;
 extern crate hole_punch;
-#[macro_use]
-extern crate lazy_static;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate tokio_core;
-extern crate tokio_file_unix;
+extern crate tokio;
 #[macro_use]
 extern crate tokio_io;
 extern crate openssl;
+extern crate tokio_file_unix;
 extern crate tokio_serde_json;
 
 #[macro_use]
@@ -28,6 +26,6 @@ mod stream;
 pub mod util;
 
 pub use error::Error;
-pub use hole_punch::{FileFormat, PubKeyHash};
+pub use hole_punch::{FileFormat, PubKeyHash, SendFuture};
 pub use peer::Peer;
 pub use stream::{NewStreamHandle, Stream};

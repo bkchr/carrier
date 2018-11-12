@@ -9,7 +9,7 @@ use tokio::runtime::Runtime;
 use std::env::args;
 
 fn main() {
-    let mut evt_loop = Runtime::new().unwrap();
+    let evt_loop = Runtime::new().unwrap();
 
     let peer_key = args().nth(1).expect(
         "Please give the public key(sha256 hash as hex) of the peer you want to connect to.",

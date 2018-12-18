@@ -58,6 +58,12 @@ impl From<&'static str> for Error {
     }
 }
 
+impl From<Error> for io::Error {
+    fn from(err: Error) -> Self {
+        io::Error::new(io::ErrorKind::Other, format!("{:?}", err))
+    }
+}
+
 //FIXME: Remove when upstream provides a better bail macro
 macro_rules! bail {
     ($e:expr) => {

@@ -7,6 +7,7 @@ Type=simple
 ExecStart=/home/carrier/carrier-bearer --certificate /home/carrier/cert.pem --private_key /home/carrier/key.pem --incoming_con_ca_path /home/carrier/trusted_cas/
 User=carrier
 Restart=always
+Environment="RUST_LOG=info"
 
 [Install]
 WantedBy=multi-user.target

@@ -2,7 +2,10 @@ extern crate carrier;
 #[allow(unused)]
 #[macro_use]
 extern crate structopt;
+extern crate pretty_env_logger;
 extern crate tokio;
+#[macro_use]
+extern crate log;
 
 use tokio::runtime::Runtime;
 
@@ -28,6 +31,8 @@ struct Options {
 }
 
 fn main() {
+    pretty_env_logger::init();
+
     let options = Options::from_args();
 
     let incoming_con_ca_vec =
@@ -44,7 +49,7 @@ fn main() {
 
     let builder = carrier::builtin_services::register(builder);
 
-    println!("Bearer running (Port: {})", options.listen_port);
+    info!("Bearer running (Port: {})", options.listen_port);
     let bearer = builder.build().unwrap();
 
     evt_loop.block_on_all(bearer).unwrap();

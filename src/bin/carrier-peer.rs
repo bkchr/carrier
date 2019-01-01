@@ -1,11 +1,16 @@
 extern crate carrier;
 extern crate tokio;
+extern crate pretty_env_logger;
+#[macro_use]
+extern crate log;
 
 use tokio::runtime::Runtime;
 
 use std::env::var;
 
 fn main() {
+    pretty_env_logger::init();
+
     let bearer_addr = var("CARRIER_SERVER_ADDR")
         .expect("Please give carrier server address via `CARRIER_SERVER_ADDR`");
     let certificate_path =
@@ -38,9 +43,9 @@ fn main() {
 
     let builder = carrier::builtin_services::register(builder);
 
-    println!("Peer connects to bearer({})", bearer_addr);
+    info!("Peer connects to bearer({})", bearer_addr);
     let peer = builder.build().unwrap();
 
-    println!("Peer running");
+    info!("Peer running");
     evt_loop.block_on_all(peer).unwrap();
 }

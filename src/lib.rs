@@ -13,6 +13,8 @@ extern crate tokio_io;
 extern crate openssl;
 extern crate tokio_file_unix;
 extern crate tokio_serde_json;
+#[macro_use]
+extern crate log;
 
 #[macro_use]
 mod error;

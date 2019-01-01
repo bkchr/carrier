@@ -47,7 +47,7 @@ impl Server for Lifeline {
                     None => bail!("No `Stream` for Lifeline"),
                 })
                 .flatten()
-                .map_err(|e| println!("ERROR: {:?}", e)),
+                .map_err(|e| error!("Lifeline error: {:?}", e)),
         );
     }
 

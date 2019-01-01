@@ -35,7 +35,7 @@ fn spawn_hole_punch_context(
                         protocol_stream_create(stream),
                         peer_context.clone(),
                     )
-                    .map_err(|e| println!("IncomingStream error: {:?}", e)),
+                    .map_err(|e| error!("IncomingStream error: {:?}", e)),
                 );
                 Ok(())
             })

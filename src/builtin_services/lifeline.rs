@@ -96,7 +96,7 @@ impl LifelineClientFuture {
     fn new(streams: Streams) -> Result<LifelineClientFuture> {
         let stdin = tokio_file_unix::raw_stdin()?;
         let stdin = tokio_file_unix::File::new_nb(stdin)?;
-        let stdin = stdin.into_reader(&tokio::reactor::Handle::current())?;
+        let stdin = stdin.into_reader(&tokio::reactor::Handle::default())?;
 
         let future = Box::new(
             streams

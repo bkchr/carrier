@@ -21,6 +21,10 @@ impl Stream {
     fn get_ref(&self) -> &hole_punch::Stream {
         &self.stream
     }
+
+    pub fn set_send_channel_size(&mut self, size: usize) {
+        self.stream.set_send_channel_size(size);
+    }
 }
 
 impl Into<Stream> for hole_punch::Stream {

@@ -195,10 +195,14 @@ impl Client for TestService {
                 .take(self.total_stream_num as u64)
                 .for_each(move |stream| {
                     let send = send.clone();
-                    tokio::spawn(stream.for_each(move |data| {
-                        let _ = send.unbounded_send(data);
-                        Ok(())
-                    }).map_err(|_| ()));
+                    tokio::spawn(
+                        stream
+                            .for_each(move |data| {
+                                let _ = send.unbounded_send(data);
+                                Ok(())
+                            })
+                            .map_err(|_| ()),
+                    );
                     Ok(())
                 })
                 .map_err(|_| ()),

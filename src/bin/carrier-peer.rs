@@ -1,6 +1,6 @@
 extern crate carrier;
-extern crate tokio;
 extern crate pretty_env_logger;
+extern crate tokio;
 #[macro_use]
 extern crate log;
 

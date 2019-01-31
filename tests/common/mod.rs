@@ -4,9 +4,9 @@ use carrier::{
     Error, FileFormat, NewStreamHandle, PubKeyHash, SendFuture,
 };
 
-use std::{net::SocketAddr, result, sync::mpsc::channel, thread, time::Duration};
+use std::{net::SocketAddr, result, thread, time::Duration};
 
-use tokio::runtime::Runtime;
+use tokio::runtime::{Runtime, TaskExecutor};
 
 use futures::{
     future, stream::futures_unordered, sync::mpsc::unbounded, Future, Sink, Stream as FStream,
@@ -18,87 +18,75 @@ type Result<T> = result::Result<T, Error>;
 
 /// Starts the Bearer.
 /// Returns the port the Bearer is listening on.
-pub fn start_bearer() -> u16 {
-    let (send, recv) = channel();
+pub fn start_bearer(executor: TaskExecutor) -> u16 {
+    let cert = include_bytes!("../../test_certs/bearer.cert.pem");
+    let key = include_bytes!("../../test_certs/bearer.key.pem");
 
-    thread::spawn(move || {
-        let cert = include_bytes!("../../test_certs/bearer.cert.pem");
-        let key = include_bytes!("../../test_certs/bearer.key.pem");
+    let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
+        "{}/test_certs/trusted_peer_cas",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("Globbing for client certificate authorities(*.pem).");
 
-        let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
-            "{}/test_certs/trusted_peer_cas",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("Globbing for client certificate authorities(*.pem).");
+    let server = carrier::Peer::builder(executor.clone())
+        .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
+        .set_private_key(key.to_vec(), FileFormat::PEM)
+        .set_client_ca_cert_files(peer_ca_vec)
+        .build()
+        .unwrap();
 
-        let evt_loop = Runtime::new().unwrap();
+    let local_addr = server.quic_local_addr();
+    executor.spawn(server.map_err(|e| panic!(e)));
 
-        let server = carrier::Peer::builder(evt_loop.executor())
-            .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
-            .set_private_key(key.to_vec(), FileFormat::PEM)
-            .set_client_ca_cert_files(peer_ca_vec)
-            .build()
-            .unwrap();
-
-        send.send(server.quic_local_addr()).unwrap();
-        evt_loop.block_on_all(server).unwrap();
-    });
-
-    recv.recv().expect("Waiting for bearer to start").port()
+    local_addr.port()
 }
 
 /// Start the peer.
 /// stream_num - The number of `Stream`s to start, 1 is minimum.
 /// bearer_port - The port of the bearer.
-pub fn start_peer(stream_num: u16, bearer_port: u16) {
-    let (send, recv) = channel();
+pub fn start_peer(stream_num: u16, bearer_port: u16, executor: TaskExecutor) {
+    let bearer_addr: SocketAddr = ([127, 0, 0, 1], bearer_port).into();
 
-    thread::spawn(move || {
-        let bearer_addr: SocketAddr = ([127, 0, 0, 1], bearer_port).into();
+    let cert = include_bytes!("../../test_certs/peer.cert.pem");
+    let key = include_bytes!("../../test_certs/peer.key.pem");
 
-        let cert = include_bytes!("../../test_certs/peer.cert.pem");
-        let key = include_bytes!("../../test_certs/peer.key.pem");
+    let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
+        "{}/test_certs/trusted_peer_cas",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("Globbing for peer certificate authorities(*.pem).");
 
-        let peer_ca_vec = carrier::util::glob_for_certificates(&format!(
-            "{}/test_certs/trusted_peer_cas",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("Globbing for peer certificate authorities(*.pem).");
+    let bearer_ca_vec = carrier::util::glob_for_certificates(&format!(
+        "{}/test_certs/trusted_cas",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("Globbing for bearer certificate authorities(*.pem).");
 
-        let bearer_ca_vec = carrier::util::glob_for_certificates(&format!(
-            "{}/test_certs/trusted_cas",
-            env!("CARGO_MANIFEST_DIR")
-        ))
-        .expect("Globbing for bearer certificate authorities(*.pem).");
+    let builder = carrier::Peer::builder(executor.clone())
+        .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
+        .set_private_key(key.to_vec(), FileFormat::PEM)
+        .set_client_ca_cert_files(peer_ca_vec)
+        .set_server_ca_cert_files(bearer_ca_vec)
+        .register_service(TestService::new(stream_num, 0))
+        .add_remote_peer(bearer_addr);
 
-        let evt_loop = Runtime::new().unwrap();
+    let builder = carrier::builtin_services::register(builder);
 
-        let builder = carrier::Peer::builder(evt_loop.executor())
-            .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
-            .set_private_key(key.to_vec(), FileFormat::PEM)
-            .set_client_ca_cert_files(peer_ca_vec)
-            .set_server_ca_cert_files(bearer_ca_vec)
-            .register_service(TestService::new(stream_num, 0))
-            .add_remote_peer(bearer_addr);
-
-        let builder = carrier::builtin_services::register(builder);
-
-        let peer = builder.build().unwrap();
-
-        send.send(()).unwrap();
-        evt_loop.block_on_all(peer).unwrap();
-    });
-
-    recv.recv().expect("Waiting for peer to start");
+    let peer = builder.build().unwrap();
+    executor.spawn(peer.map_err(|e| panic!(e)));
 }
 
 /// Run the client.
 /// stream_num - The number of `Stream`s the client should start
 /// remote_stream_num - The number of remote `Stream`s the peer starts
 /// bearer_port - The port of the bearer.
-pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
+pub fn run_client(
+    stream_num: u16,
+    remote_stream_num: u16,
+    bearer_port: u16,
+    runtime: &mut Runtime,
+) {
     let total_stream_num = (stream_num + remote_stream_num - 1) as usize;
-    let mut evt_loop = Runtime::new().unwrap();
 
     let bearer_addr: SocketAddr = ([127, 0, 0, 1], bearer_port).into();
 
@@ -110,7 +98,7 @@ pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
         PubKeyHash::from_x509_pem(peer_cert, false).expect("Create peer key from peer cert.");
     println!("PEER: {}", peer_key);
 
-    let builder = carrier::Peer::builder(evt_loop.executor())
+    let builder = carrier::Peer::builder(runtime.executor())
         .set_certificate_chain(vec![cert.to_vec()], FileFormat::PEM)
         .set_private_key(key.to_vec(), FileFormat::PEM)
         .add_remote_peer(bearer_addr);
@@ -118,7 +106,7 @@ pub fn run_client(stream_num: u16, remote_stream_num: u16, bearer_port: u16) {
     let mut peer = builder.build().unwrap();
 
     for _ in 0..3 {
-        let res = evt_loop.block_on(peer.run_service(
+        let res = runtime.block_on(peer.run_service(
             TestService::new(stream_num, total_stream_num),
             peer_key.clone(),
         ));
@@ -173,8 +161,10 @@ impl Server for TestService {
             streams
                 .select(futures_unordered(new_streams))
                 .for_each(|mut stream| {
+                    println!("HEY");
                     stream.start_send(TEST_SERVICE_DATA.into()).unwrap();
                     stream.poll_complete().unwrap();
+                    //tokio::spawn(stream.into_future().map(|_| ()).map_err(|_| ()));
                     Ok(())
                 })
                 .map_err(|e| panic!(e)),
@@ -205,12 +195,10 @@ impl Client for TestService {
                 .take(self.total_stream_num as u64)
                 .for_each(move |stream| {
                     let send = send.clone();
-                    tokio::spawn(stream.into_future().map_err(|_| ()).and_then(
-                        move |(data, _)| {
-                            let _ = send.unbounded_send(data.unwrap());
-                            Ok(())
-                        },
-                    ));
+                    tokio::spawn(stream.for_each(move |data| {
+                        let _ = send.unbounded_send(data);
+                        Ok(())
+                    }).map_err(|_| ()));
                     Ok(())
                 })
                 .map_err(|_| ()),

@@ -11,11 +11,62 @@ use hole_punch::{Context, CreateConnectionToPeerHandle, PubKeyHash, SendFuture};
 
 use futures::{
     sync::oneshot,
+    try_ready,
     Async::{NotReady, Ready},
     Future, Poll, Sink, Stream as FStream,
 };
 
-use tokio::{self, runtime::TaskExecutor};
+use tokio::runtime::TaskExecutor;
+
+struct HolePunchContextRunner {
+    context: Context,
+    handle: Option<oneshot::Sender<()>>,
+    peer_context: PeerContext,
+}
+
+impl HolePunchContextRunner {
+    fn new(context: Context, handle: oneshot::Sender<()>, peer_context: PeerContext) -> Self {
+        Self {
+            context,
+            handle: Some(handle),
+            peer_context,
+        }
+    }
+}
+
+impl Future for HolePunchContextRunner {
+    type Item = ();
+    type Error = ();
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        if self
+            .handle
+            .as_mut()
+            .and_then(|h| h.poll_cancel().map(|r| r.is_ready()).ok())
+            .unwrap_or(true)
+        {
+            return Ok(Ready(()));
+        }
+
+        loop {
+            let stream = match try_ready!(self.context.poll().map_err(|e| error!("{:?}", e))) {
+                Some(stream) => stream,
+                None => {
+                    error!("Holepunch context returned `None`!");
+                    return Ok(Ready(()));
+                }
+            };
+
+            tokio::spawn(
+                build_incoming_stream_future(
+                    protocol_stream_create(stream),
+                    self.peer_context.clone(),
+                )
+                .map_err(|e| error!("IncomingStream error: {:?}", e)),
+            );
+        }
+    }
+}
 
 /// Spawn the hole punch `Context`.
 /// All incoming `Stream`s will be wrapped by the "incoming_stream_future" that processes the
@@ -24,27 +75,9 @@ fn spawn_hole_punch_context(
     context: Context,
     peer_context: PeerContext,
     handle: TaskExecutor,
-) -> oneshot::Receiver<Result<()>> {
+) -> oneshot::Receiver<()> {
     let (sender, recv) = oneshot::channel();
-
-    handle.spawn(
-        context
-            .for_each(move |stream| {
-                tokio::spawn(
-                    build_incoming_stream_future(
-                        protocol_stream_create(stream),
-                        peer_context.clone(),
-                    )
-                    .map_err(|e| error!("IncomingStream error: {:?}", e)),
-                );
-                Ok(())
-            })
-            .then(|r| {
-                let _ = sender.send(r.map_err(|e| e.into()));
-                Ok(())
-            }),
-    );
-
+    handle.spawn(HolePunchContextRunner::new(context, sender, peer_context));
     recv
 }
 
@@ -52,7 +85,7 @@ fn spawn_hole_punch_context(
 /// It handles all registered services and is also responsible for spawning new service instances.
 pub struct Peer {
     peer_context: PeerContext,
-    context_result: oneshot::Receiver<Result<()>>,
+    context_result: oneshot::Receiver<()>,
     create_connection_to_peer_handle: CreateConnectionToPeerHandle,
     quic_local_addr: SocketAddr,
 }
@@ -134,7 +167,7 @@ impl Future for Peer {
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         match self.context_result.poll() {
             Err(_) => Ok(Ready(())),
-            Ok(Ready(res)) => Ok(Ready(res?)),
+            Ok(Ready(())) => Ok(Ready(())),
             Ok(NotReady) => Ok(NotReady),
         }
     }

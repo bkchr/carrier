@@ -25,3 +25,6 @@ tokio = { git = "https://github.com/bkchr/tokio.git", branch = "protocol_switch_
 tokio-executor = { git = "https://github.com/bkchr/tokio.git", branch = "protocol_switch_without_loosing_data" }
 tokio-io = { git = "https://github.com/bkchr/tokio.git", branch = "protocol_switch_without_loosing_data" }
 tokio-reactor = { git = "https://github.com/bkchr/tokio.git", branch = "protocol_switch_without_loosing_data" }
+
+[profile.release]
+panic = "abort"

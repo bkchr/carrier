@@ -1,6 +1,7 @@
 use protocol::Protocol;
 use service::{Client, Server, ServiceId, Streams};
-use stream::{NewStreamHandle, ProtocolStream, Stream};
+use stream::{NewStreamHandle, Stream};
+use hole_punch::ProtocolStream;
 
 use std::{
     collections::HashMap,
@@ -74,7 +75,7 @@ impl Inner {
         &mut self,
         name: &str,
         remote_service_id: ServiceId,
-        mut stream: ProtocolStream,
+        mut stream: ProtocolStream<Protocol>,
     ) {
         if self.services.contains_key(name) {
             let id = self.next_service_id();
@@ -110,7 +111,7 @@ impl Inner {
 
     fn connect_stream_to_service_instance(
         &mut self,
-        mut stream: ProtocolStream,
+        mut stream: ProtocolStream<Protocol>,
         service_id: ServiceId,
     ) {
         match self.service_instances.get_mut(&service_id) {
@@ -125,7 +126,7 @@ impl Inner {
     }
 }
 
-fn send_protocol_message(stream: &mut ProtocolStream, msg: Protocol) {
+fn send_protocol_message(stream: &mut ProtocolStream<Protocol>, msg: Protocol) {
     let _ = stream.start_send(msg);
     let _ = stream.poll_complete();
 }
@@ -178,7 +179,7 @@ impl PeerContext {
         &mut self,
         name: &str,
         remote_service_id: ServiceId,
-        stream: ProtocolStream,
+        stream: ProtocolStream<Protocol>,
     ) {
         self.inner
             .lock()
@@ -210,7 +211,7 @@ impl PeerContext {
 
     pub fn connect_stream_to_service_instance(
         &mut self,
-        stream: ProtocolStream,
+        stream: ProtocolStream<Protocol>,
         service_id: ServiceId,
     ) {
         self.inner

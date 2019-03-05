@@ -3,11 +3,10 @@ use error::*;
 use peer_builder::PeerBuilder;
 use protocol::Protocol;
 use service::Client;
-use stream::{protocol_stream_create, ProtocolStream};
 
 use std::net::SocketAddr;
 
-use hole_punch::{Context, CreateConnectionToPeerHandle, PubKeyHash, SendFuture};
+use hole_punch::{Context, CreateConnectionToPeerHandle, PubKeyHash, SendFuture, ProtocolStream};
 
 use futures::{
     sync::oneshot,
@@ -59,7 +58,7 @@ impl Future for HolePunchContextRunner {
 
             tokio::spawn(
                 build_incoming_stream_future(
-                    protocol_stream_create(stream),
+                    stream.into(),
                     self.peer_context.clone(),
                 )
                 .map_err(|e| error!("IncomingStream error: {:?}", e)),
@@ -127,7 +126,7 @@ impl Peer {
             .create_connection_to_peer(peer)
             .map_err(|e| Error::from(e))
             .and_then(move |stream| {
-                let stream = protocol_stream_create(stream);
+                let stream = ProtocolStream::from(stream.into());
                 stream
                     .send(Protocol::RequestServiceStart {
                         name: name.into(),
@@ -174,7 +173,7 @@ impl Future for Peer {
 }
 
 fn build_incoming_stream_future(
-    stream: ProtocolStream,
+    stream: ProtocolStream<Protocol>,
     mut context: PeerContext,
 ) -> impl SendFuture<Item = (), Error = Error> {
     stream

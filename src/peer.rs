@@ -6,7 +6,7 @@ use service::Client;
 
 use std::net::SocketAddr;
 
-use hole_punch::{Context, CreateConnectionToPeerHandle, PubKeyHash, SendFuture, ProtocolStream};
+use hole_punch::{Context, CreateConnectionToPeerHandle, ProtocolStream, PubKeyHash, SendFuture};
 
 use futures::{
     sync::oneshot,
@@ -57,11 +57,8 @@ impl Future for HolePunchContextRunner {
             };
 
             tokio::spawn(
-                build_incoming_stream_future(
-                    stream.into(),
-                    self.peer_context.clone(),
-                )
-                .map_err(|e| error!("IncomingStream error: {:?}", e)),
+                build_incoming_stream_future(stream.into(), self.peer_context.clone())
+                    .map_err(|e| error!("IncomingStream error: {:?}", e)),
             );
         }
     }
@@ -124,16 +121,16 @@ impl Peer {
 
         self.create_connection_to_peer_handle
             .create_connection_to_peer(peer)
-            .map_err(|e| Error::from(e))
+            .map_err(Error::from)
             .and_then(move |stream| {
-                let stream = ProtocolStream::from(stream.into());
+                let stream: ProtocolStream<Protocol> = stream.into();
                 stream
                     .send(Protocol::RequestServiceStart {
                         name: name.into(),
                         local_id: local_service_id,
                     })
                     .and_then(|s| s.into_future().map_err(|e| e.0))
-                    .map_err(|e| Error::from(e))
+                    .map_err(Into::into)
             })
             .and_then(move |(msg, stream)| match msg {
                 None => bail!("Stream closed while requesting service!"),
@@ -141,7 +138,7 @@ impl Peer {
                 Some(Protocol::ServiceNotFound) => bail!("Requested service({}) not found!", name),
                 _ => bail!("Received not expected message!"),
             })
-            .map_err(|e| e.into())
+            .map_err(Into::into)
             .and_then(move |(id, stream)| {
                 peer_context.start_client_service_instance(
                     service,
@@ -182,11 +179,11 @@ fn build_incoming_stream_future(
         .and_then(move |(msg, stream)| match msg {
             None => Ok(()),
             Some(Protocol::ConnectToService { id }) => {
-                context.connect_stream_to_service_instance(stream.into(), id);
+                context.connect_stream_to_service_instance(stream, id);
                 Ok(())
             }
             Some(Protocol::RequestServiceStart { name, local_id }) => {
-                context.start_server_service_instance(&name, local_id, stream.into());
+                context.start_server_service_instance(&name, local_id, stream);
                 Ok(())
             }
             _ => bail!("Unexpected message at incoming Stream."),

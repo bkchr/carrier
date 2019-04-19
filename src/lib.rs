@@ -30,4 +30,4 @@ pub mod util;
 pub use error::Error;
 pub use hole_punch::{FileFormat, PubKeyHash, SendFuture};
 pub use peer::Peer;
-pub use stream::{NewStreamHandle, Stream};
+pub use stream::{NewStreamHandle, Stream, ProtocolStream};

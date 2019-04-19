@@ -2,7 +2,7 @@ use error::*;
 use protocol::Protocol;
 use service::ServiceId;
 
-use hole_punch::{self, SendFuture, ProtocolStream};
+use hole_punch::{self, SendFuture, StreamWithProtocol};
 
 use futures::{Future, Poll, Sink, StartSend, Stream as FStream};
 
@@ -30,10 +30,10 @@ impl From<hole_punch::Stream> for Stream {
     }
 }
 
-impl From<ProtocolStream<Protocol>> for Stream {
+impl From<hole_punch::ProtocolStream<Protocol>> for Stream {
     fn from(stream: hole_punch::ProtocolStream<Protocol>) -> Self {
         Self {
-            stream: stream.into()
+            stream: stream.into(),
         }
     }
 }
@@ -106,7 +106,7 @@ impl NewStreamHandle {
             .new_stream()
             .map_err(|e| e.into())
             .and_then(move |stream| {
-                let stream = ProtocolStream::from(stream.into());
+                let stream = hole_punch::ProtocolStream::from(stream.into());
                 stream
                     .send(Protocol::ConnectToService { id: service_id })
                     .map_err(|e| e.into())
@@ -120,3 +120,5 @@ impl NewStreamHandle {
             })
     }
 }
+
+pub type ProtocolStream<P> = StreamWithProtocol<Stream, P>;

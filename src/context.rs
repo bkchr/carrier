@@ -1,7 +1,7 @@
+use hole_punch::ProtocolStream;
 use protocol::Protocol;
 use service::{Client, Server, ServiceId, Streams};
 use stream::{NewStreamHandle, Stream};
-use hole_punch::ProtocolStream;
 
 use std::{
     collections::HashMap,

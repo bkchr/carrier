@@ -29,7 +29,7 @@ impl From<hole_punch::Error> for Error {
     fn from(err: hole_punch::Error) -> Error {
         match err {
             hole_punch::Error::PeerNotFound(peer) => Error::PeerNotFound(peer),
-            e @ _ => Error::HolePunch(e),
+            e => Error::HolePunch(e),
         }
     }
 }
@@ -54,7 +54,7 @@ impl From<openssl::error::ErrorStack> for Error {
 
 impl From<&'static str> for Error {
     fn from(err: &'static str) -> Error {
-        Error::Custom(::failure::err_msg::<&'static str>(err).into())
+        Error::Custom(::failure::err_msg::<&'static str>(err))
     }
 }
 

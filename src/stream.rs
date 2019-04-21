@@ -6,9 +6,16 @@ use hole_punch::{self, SendFuture, StreamWithProtocol};
 
 use futures::{Future, Poll, Sink, StartSend, Stream as FStream};
 
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::{
+    codec::{Framed, LengthDelimitedCodec},
+    io::{AsyncRead, AsyncWrite},
+};
 
 use std::io::{self, Read, Write};
+
+use serde::{Deserialize, Serialize};
+
+use tokio_serde_json::{ReadJson, WriteJson};
 
 pub struct Stream {
     stream: hole_punch::Stream,
@@ -35,6 +42,29 @@ impl From<hole_punch::ProtocolStream<Protocol>> for Stream {
         Self {
             stream: stream.into(),
         }
+    }
+}
+
+impl<P> Into<ProtocolStream<P>> for Stream
+where
+    P: 'static + Serialize + for<'de> Deserialize<'de>,
+{
+    fn into(self) -> ProtocolStream<P> {
+        WriteJson::new(ReadJson::new(Framed::new(
+            self,
+            LengthDelimitedCodec::new(),
+        )))
+    }
+}
+
+impl<P> From<ProtocolStream<P>> for Stream
+where
+    P: 'static + Serialize + for<'de> Deserialize<'de>,
+{
+    fn from(stream: ProtocolStream<P>) -> Stream {
+        let mut parts = stream.into_inner().into_inner().into_parts();
+        parts.io.stream.reinsert_data(parts.read_buf);
+        parts.io
     }
 }
 

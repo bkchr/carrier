@@ -108,10 +108,12 @@ impl PeerBuilder {
     /// Builds the `Peer` instance.
     pub fn build(self) -> Result<Peer> {
         let private_key = self.load_private_key()?;
+
+        let config = self.config.enable_mdns("carrier");
         let context = Context::new(
             PubKeyHash::from_private_key(private_key, true)?,
             self.handle.clone(),
-            self.config.build()?,
+            config.build()?,
         )?;
         Ok(Peer::new(self.handle.clone(), context, self.peer_context))
     }

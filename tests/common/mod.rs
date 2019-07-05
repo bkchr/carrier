@@ -261,7 +261,6 @@ impl Client for TestService {
                             })
                             .map_err(|_| ())
                             .and_then(|_| {
-                                println!("HEY");
                                 Ok(())
                             }),
                     );

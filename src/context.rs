@@ -17,7 +17,7 @@ use futures::{
 };
 
 struct Inner {
-    services: HashMap<String, Box<Server + Send>>,
+    services: HashMap<String, Box<dyn Server + Send>>,
     service_instances: HashMap<ServiceId, UnboundedSender<Stream>>,
     next_service_id: ServiceId,
     service_instance_dropped_sender: Sender<ServiceId>,

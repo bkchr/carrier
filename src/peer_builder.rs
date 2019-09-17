@@ -6,11 +6,10 @@ use service::Server;
 use std::{
     fs::File,
     io::Read,
-    net::ToSocketAddrs,
     path::{Path, PathBuf},
 };
 
-use hole_punch::{Config, ConfigBuilder, Context, FileFormat, PubKeyHash};
+use hole_punch::{Config, ConfigBuilder, Context, FileFormat, PubKeyHash, Resolve};
 
 use openssl::pkey::{PKey, Private};
 
@@ -100,9 +99,20 @@ impl PeerBuilder {
     /// The peer will hold a connection to one of the given remote peers. If one connection is
     /// closed, a new connection to the next remote peer is created. This ensures that the local
     /// peer is reachable by other peers.
-    pub fn add_remote_peer<T: ToSocketAddrs + 'static + Send>(mut self, peer: T) -> Self {
+    pub fn add_remote_peer<T: Resolve>(mut self, peer: T) -> Self {
         self.config = self.config.add_remote_peer(peer);
         self
+    }
+
+    /// Add remote peer.
+    /// The peer will hold a connection to one of the given remote peers. If one connection is
+    /// closed, a new connection to the next remote peer is created. This ensures that the local
+    /// peer is reachable by other peers.
+    ///
+    /// The `url` is expected to contain a port, otherwise an error is returned.
+    pub fn add_remote_peer_by_url(mut self, url: String) -> Result<Self> {
+        self.config = self.config.add_remote_peer_by_url(url)?;
+        Ok(self)
     }
 
     /// Builds the `Peer` instance.

@@ -89,7 +89,7 @@ impl<R: AsyncRead> Future for StdinReader<R> {
 }
 
 pub struct LifelineClientFuture {
-    future: Box<Future<Item = (), Error = Error> + Send>,
+    future: Box<dyn Future<Item = (), Error = Error> + Send>,
 }
 
 impl LifelineClientFuture {

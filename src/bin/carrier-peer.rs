@@ -39,7 +39,7 @@ fn main() {
         .set_private_key_file(key_path)
         .set_client_ca_cert_files(client_ca_vec)
         .set_server_ca_cert_files(server_ca_vec)
-        .add_remote_peer(bearer_addr.clone());
+        .add_remote_peer_by_url(bearer_addr.clone()).expect("Failed to add remote peer by url");
 
     let builder = carrier::builtin_services::register(builder);
 

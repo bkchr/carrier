@@ -28,6 +28,6 @@ mod stream;
 pub mod util;
 
 pub use error::Error;
-pub use hole_punch::{FileFormat, PubKeyHash, SendFuture};
+pub use hole_punch::{FileFormat, PubKeyHash, SendFuture, Resolve};
 pub use peer::Peer;
 pub use stream::{NewStreamHandle, Stream, ProtocolStream};
